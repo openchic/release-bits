@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: openchic/shipkit/actions/changelog@v1
+      - uses: openchic/release-bits/actions/changelog@v1
         with:
           version: ${{ inputs.version }}
           version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}

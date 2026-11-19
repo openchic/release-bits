@@ -1,12 +1,12 @@
 <div align="center">
-  <h1>shipkit</h1>
+  <h1>ReleaseBits</h1>
   <p>Reusable GitHub Actions for Apple app release workflows.</p>
   <p>English&nbsp;&nbsp;|&nbsp;&nbsp;<a href="README-zh_CN.md">简体中文</a></p>
 </div>
 
 ## Features
 
-shipkit currently provides the `changelog` Action.
+ReleaseBits currently provides the `changelog` Action.
 
 - **Generate release notes in Chinese and English** from `feat` and `fix` commits.
 - Write the notes to `changelogs.json` and **open a draft PR for review**.
@@ -23,8 +23,8 @@ For inputs, outputs, draft handling, branch cleanup, and app releases after merg
 ## Agent setup prompt
 
 ```text
-Integrate the openchic/shipkit changelog Action into this app repository.
-Read shipkit's docs/changelog.md and examples/release-notes.yml, and verify the published Action tag.
+Integrate the ReleaseBits changelog Action from openchic/release-bits into this app repository.
+Read that repository's docs/changelog.md and examples/release-notes.yml, and verify the published Action tag.
 Use the existing workflows and version source. Follow the example for manual dispatch, permissions, secret references, and branch cleanup when a PR closes.
 Keep using the app's existing build and release workflows.
 Validate the changed YAML and explain how to configure LLM_API_KEY and run the workflow.
@@ -36,4 +36,4 @@ See [AGENTS.md](AGENTS.md) for the repository layout, development commands, and 
 
 ## License
 
-shipkit is licensed under the [Apache License 2.0](LICENSE).
+ReleaseBits is licensed under the [Apache License 2.0](LICENSE).

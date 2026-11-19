@@ -1,4 +1,4 @@
-# shipkit
+# ReleaseBits
 
 ## 仓库结构
 
@@ -17,7 +17,7 @@ pnpm build
 pnpm test
 ```
 
-单独构建 `changelog` 时运行 `pnpm --filter @shipkit/changelog build`。
+单独构建 `changelog` 时运行 `pnpm --filter @release-bits/changelog build`。
 
 - 行为变更补测试，覆盖受影响的版本、复用和漂移规则。修改 Action 或示例后解析相关 YAML。
 - 说明真实 PR 和 Gemini 调用的验证情况。

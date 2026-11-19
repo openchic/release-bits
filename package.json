@@ -1,5 +1,5 @@
 {
-  "name": "shipkit",
+  "name": "release-bits",
   "private": true,
   "packageManager": "pnpm@11.9.0",
   "scripts": {

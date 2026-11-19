@@ -1,5 +1,5 @@
 {
-  "name": "@shipkit/changelog",
+  "name": "@release-bits/changelog",
   "version": "1.0.1",
   "private": true,
   "type": "module",

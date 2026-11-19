@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: openchic/shipkit/actions/changelog@v1
+      - uses: openchic/release-bits/actions/changelog@v1
         with:
           version: 1.2.3
           version-type: minor
