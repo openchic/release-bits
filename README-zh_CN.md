@@ -54,20 +54,6 @@ jobs:
 
 完整 workflow（含 PR 关闭后的分支清理）见 [examples/release-notes.yml](examples/release-notes.yml)。
 
-## 本地预览
-
-使用 Node.js 24 运行仓库内的 CLI。
-
-```bash
-export GEMINI_API_KEY=...
-
-./bin/shipkit changelog \
-  --version 1.2.3 \
-  --version-type minor
-```
-
-只生成预览文件，不写 catalog、不开 PR。
-
 ## 文档
 
 - [action 契约](docs/changelog.md)：输入、输出、复用与漂移规则、失败矩阵。

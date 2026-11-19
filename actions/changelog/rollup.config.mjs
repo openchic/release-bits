@@ -33,7 +33,7 @@ function distribution() {
 }
 
 export default {
-  input: { index: 'src/index.ts', cli: 'src/cli.ts' },
+  input: { index: 'src/index.ts' },
   external: isBuiltin,
   plugins: [distribution(), resolve({ preferBuiltins: true }), commonjs({ ignoreTryCatch: false }), json(), typescript({ include: ['src/**/*.ts'] })],
   output: { dir: 'dist', format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name].mjs' },

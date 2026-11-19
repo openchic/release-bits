@@ -26,12 +26,6 @@ async function run() {
   })
   for (const [name, value] of Object.entries(result.outputs)) core.setOutput(name, value)
   for (const message of result.warnings) core.warning(message)
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    await core.summary.addHeading('Release notes v' + result.outputs.version, 3)
-      .addLink('Draft PR', result.outputs['pr-url'])
-      .addList(['Branch: ' + result.outputs.branch, 'Commits: ' + result.outputs['commit-count'],
-        'Warnings: ' + result.outputs['warning-count'], ...result.warnings]).write()
-  }
 }
 
 run().catch((error: unknown) => core.setFailed(error instanceof Error ? error.message : String(error)))

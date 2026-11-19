@@ -4,7 +4,6 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
 import { prepare, type Inputs } from '../src/prepare.ts'
 import { evidence, generate, maxLength, validateNotes, warnings } from '../src/notes.ts'
 import { effectiveVersion } from '../src/version.ts'
@@ -117,26 +116,4 @@ test('generation detects HEAD drift before writing the catalog', async () => {
     return notes
   })), /changed during generation/)
   assert.equal(readFileSync('changelogs.json', 'utf8'), before)
-})
-
-test('preview runs the packaged CLI in the caller repository', () => {
-  const preview = fileURLToPath(new URL('../../../bin/shipkit', import.meta.url))
-  const mock = join(root, 'gemini.mjs')
-  writeFileSync(mock, `
-    globalThis.fetch = async (url, options) => {
-      if (!String(url).endsWith(':generateContent') ||
-          options.headers['x-goog-api-key'] !== 'fixture' ||
-          !options.body.includes('fix: display')) throw new Error('unexpected Gemini request')
-      const notes = { 'zh-CN': ['修复了显示。'], en: ['Fixed display.'] }
-      return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({notes}) }] } }] })
-    }
-  `)
-  const output = execFileSync(preview, ['changelog', '--version', '1.0.0', '--output-dir', 'preview'], {
-    encoding: 'utf8',
-    env: { ...process.env, SHIPKIT_GEMINI_API_KEY: 'fixture', NODE_OPTIONS: '--import=' + pathToFileURL(mock).href },
-  })
-  const data = JSON.parse(readFileSync('preview/release-notes-1.0.0.json', 'utf8'))
-  assert.deepEqual(data.notes.en, ['Fixed display.'])
-  assert.match(output, /Fixed display\./)
-  assert.equal(git('status', '--porcelain', '--', 'changelogs.json'), '')
 })

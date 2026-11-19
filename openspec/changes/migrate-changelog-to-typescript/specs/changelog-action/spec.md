@@ -15,10 +15,6 @@ The Action SHALL preserve the documented seven inputs, nine outputs, draft reuse
 - **WHEN** a release needs a draft PR
 - **THEN** reuse a valid branch draft before generating notes, preserve published history and report the final previews.
 
-#### Scenario: Local preview
-- **WHEN** a user runs `./bin/shipkit changelog` with Node.js and a model credential
-- **THEN** the CLI produces bilingual previews without writing the catalog or opening a PR.
-
 ### Requirement: Independent promotion
 A release SHALL update only the selected action directory on its major snapshot and provide an action-specific fixed version.
 
@@ -45,3 +41,4 @@ A release SHALL update only the selected action directory on its major snapshot 
 #### Scenario: A second major starts
 - **WHEN** an action first releases v2
 - **THEN** its directory is available on v2 while changelog remains callable at v1.
+

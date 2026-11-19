@@ -287,23 +287,6 @@ if: >-
 | 生成期间 HEAD 变化或出现 catalog 之外的改动 | 失败，不推送 |
 | 浅克隆补拉失败 | 失败，检查 checkout 凭据与仓库访问权限 |
 
-## 本地预览
-
-CLI 使用 Node.js，与 Action 共用生成逻辑，只做预览：不写 catalog、不开 PR、不需要 `GH_TOKEN`。
-
-```bash
-export GEMINI_API_KEY=...
-
-./bin/shipkit changelog \
-  --version 1.2.3 \
-  --version-type minor \
-  --base-ref v1.2.2 \
-  --max-chars 50 \
-  --output-dir dist
-```
-
-生成两个预览文件并打印 Markdown；密钥本地回退读 `GEMINI_API_KEY`。
-
 ## 从 clean-mac 迁移
 
 | 行为 | clean-mac | shipkit |

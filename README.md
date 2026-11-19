@@ -54,20 +54,6 @@ jobs:
 
 The full workflow, including branch cleanup when the PR closes, is in [examples/release-notes.yml](examples/release-notes.yml).
 
-## Local preview
-
-Use Node.js 24 to run the packaged CLI.
-
-```bash
-export GEMINI_API_KEY=...
-
-./bin/shipkit changelog \
-  --version 1.2.3 \
-  --version-type minor
-```
-
-This writes preview files only; it does not update the catalog or create a PR.
-
 ## Documentation
 
 - [Action contract](docs/changelog.md): inputs, outputs, reuse and drift rules, failure matrix.

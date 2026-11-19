@@ -11,10 +11,7 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm build
 pnpm test
-./bin/shipkit changelog --version 1.2.3
 ```
-
-本地预览使用 Node.js 24，通过 `./bin/shipkit` 调用打包后的 CLI。
 
 ## 结构
 

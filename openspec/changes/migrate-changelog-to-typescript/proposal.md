@@ -8,7 +8,7 @@ Shipkit delivers Apple release tools from one repository. Consumers choose a com
 - Implement changelog as a bundled Node 24 Action, preserving its seven inputs, nine outputs and draft workflow.
 - Use `pnpm version` to bump the selected action package, commit its `package.json` change to `main`, and atomically publish action-specific fixed and major snapshot tags.
 - Generate GitHub Release notes from that action’s conventional `feat` and `fix` commits.
-- Use Node.js for local preview, tests and release tooling. Retire the Python module entry point. The macOS and iOS build actions are future changes.
+- Use Node.js for the Action, tests and release tooling. Retire the Python module entry point and local CLI. The macOS and iOS build actions are future changes.
 
 ## Capabilities
 
