@@ -1,0 +1,1 @@
+"""Changelog action implementation."""

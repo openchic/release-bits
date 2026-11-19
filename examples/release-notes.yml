@@ -1,0 +1,59 @@
+name: Prepare release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Base version, for example 1.2.3
+        required: true
+      version_type:
+        description: Leave none to use the version as-is
+        type: choice
+        options: [none, major, minor, patch]
+        default: none
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  notes:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: openchic/shipkit/actions/changelog@v1
+        with:
+          version: ${{ inputs.version }}
+          version-type: ${{ inputs.version_type == 'none' && '' || inputs.version_type }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHIPKIT_GEMINI_API_KEY: ${{ secrets.SHIPKIT_GEMINI_API_KEY }}
+
+  cleanup:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'changelogs/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          ref="repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}"
+          if output="$(gh api "$ref" 2>&1)"; then
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"
+          elif [[ "$output" == *"HTTP 404"* ]]; then
+            echo "Release branch already deleted"
+          else
+            printf '%s\n' "$output" >&2
+            exit 1
+          fi

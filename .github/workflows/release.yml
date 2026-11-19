@@ -1,0 +1,87 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version in X.Y.Z format
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Test
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python3 -m unittest discover -s tests -v
+          PYTHONPATH=src python3 -m compileall -q src tests
+
+      - name: Tag and release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::version must use X.Y.Z format"
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          MAJOR="v${VERSION%%.*}"
+          HEAD_SHA="$(git rev-parse HEAD)"
+
+          latest="$(
+            git tag --list 'v*' \
+              | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+              | grep -Fvx "$TAG" \
+              | sort -V \
+              | tail -n1
+          )" || true
+          if [[ -n "$latest" ]] && [[ "$(printf '%s\n%s\n' "$latest" "$TAG" | sort -V | tail -n1)" != "$TAG" ]]; then
+            echo "::error::$TAG must be greater than $latest"
+            exit 1
+          fi
+
+          if existing_sha="$(git rev-parse -q --verify "refs/tags/$TAG^{commit}")"; then
+            if [[ "$existing_sha" != "$HEAD_SHA" ]]; then
+              echo "::error::Tag $TAG already exists at $existing_sha, not at HEAD"
+              exit 1
+            fi
+            echo "Tag $TAG already points to HEAD; resuming"
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="github-actions[bot]@users.noreply.github.com" \
+                -c tag.gpgsign=false \
+                tag -a "$TAG" -m "$TAG"
+          fi
+
+          git -c user.name="github-actions[bot]" \
+              -c user.email="github-actions[bot]@users.noreply.github.com" \
+              -c tag.gpgsign=false \
+              tag -fa "$MAJOR" -m "$MAJOR" "$HEAD_SHA"
+
+          git push --atomic origin "refs/tags/$TAG" "+refs/tags/$MAJOR"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
