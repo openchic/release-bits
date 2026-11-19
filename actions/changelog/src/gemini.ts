@@ -1,3 +1,5 @@
+import { requiredEnv } from './env.ts'
+
 export const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 const list = { type: 'ARRAY', items: { type: 'STRING' } }
 const responseSchema = {
@@ -7,8 +9,7 @@ const responseSchema = {
 }
 
 export async function requestNotes(prompt: string, model: string): Promise<unknown> {
-  const key = process.env.SHIPKIT_GEMINI_API_KEY || process.env.GEMINI_API_KEY
-  if (!key) throw new Error('SHIPKIT_GEMINI_API_KEY is required')
+  const key = requiredEnv('LLM_API_KEY')
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
     encodeURIComponent(model) + ':generateContent'
   const response = await fetch(url, {

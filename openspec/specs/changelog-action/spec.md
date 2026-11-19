@@ -1,8 +1,10 @@
+# Changelog Action Specification
+
 ## Purpose
 
 Provide a directly executable GitHub Action for bilingual Apple release notes with independent action versions in the same repository.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Changelog compatibility
 The Action SHALL preserve the documented seven inputs, nine outputs, draft reuse order, atomic catalog updates and drift checks.
@@ -14,6 +16,17 @@ The Action SHALL preserve the documented seven inputs, nine outputs, draft reuse
 #### Scenario: New draft or existing branch
 - **WHEN** a release needs a draft PR
 - **THEN** reuse a valid branch draft before generating notes, preserve published history and report the final previews.
+
+### Requirement: Runtime credential names
+The Action SHALL read its GitHub API token from `GITHUB_TOKEN` and its language model API key from `LLM_API_KEY`.
+
+#### Scenario: Missing GitHub token
+- **WHEN** the Action starts without `GITHUB_TOKEN`
+- **THEN** fail with an error that names `GITHUB_TOKEN`.
+
+#### Scenario: Missing model key
+- **WHEN** the Action needs to generate notes and `LLM_API_KEY` is missing
+- **THEN** fail with an error that names `LLM_API_KEY`.
 
 ### Requirement: Independent promotion
 A release SHALL update only the selected action directory on its major snapshot and provide an action-specific fixed version.
@@ -41,4 +54,3 @@ A release SHALL update only the selected action directory on its major snapshot 
 #### Scenario: A second major starts
 - **WHEN** an action first releases v2
 - **THEN** its directory is available on v2 while changelog remains callable at v1.
-

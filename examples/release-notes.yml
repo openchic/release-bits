@@ -31,8 +31,8 @@ jobs:
           version: ${{ inputs.version }}
           version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}
         env:
-          GH_TOKEN: ${{ github.token }}
-          SHIPKIT_GEMINI_API_KEY: ${{ secrets.SHIPKIT_GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 
   cleanup:
     if: >-
@@ -44,7 +44,7 @@ jobs:
       contents: write
     steps:
       - env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail

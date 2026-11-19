@@ -32,7 +32,7 @@ jobs:
         with:
           version: 1.2.3
         env:
-          GH_TOKEN: fixture
+          GITHUB_TOKEN: fixture
           NODE_OPTIONS: --import=${{ github.workspace }}/actions/changelog/test/mock-github.mjs
       - name: Verify runner outputs
         env:

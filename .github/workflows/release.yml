@@ -45,7 +45,7 @@ jobs:
         env:
           ACTION: ${{ inputs.action }}
           VERSION_TYPE: ${{ inputs.version-type }}
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           SHIPKIT_RELEASE_NOTES_FILE: ${{ runner.temp }}/shipkit-release-notes.md
         run: |
           set -euo pipefail

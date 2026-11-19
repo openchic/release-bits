@@ -4,76 +4,35 @@
   <p>English&nbsp;&nbsp;|&nbsp;&nbsp;<a href="README-zh_CN.md">简体中文</a></p>
 </div>
 
-shipkit currently provides `changelog`: it turns `feat` and `fix` commits into a bilingual release-notes draft, writes the draft to `changelogs.json`, and creates or reuses a draft pull request.
-
 ## Features
 
-- Generate Chinese and English notes from commits since the previous tag.
-- Create or reuse a draft PR on `changelogs/v{version}`; merging the PR approves the notes.
-- Re-running is idempotent: existing PRs, branches, and drafts are reused without overwriting manual edits or calling Gemini again.
-- No review flag in the catalog; draft state is owned by the branch and PR lifecycle.
-- App cleanup, tags, GitHub Releases, appcasts, and packaging remain in the app repository; this repository separately publishes Shipkit Action versions.
+shipkit currently provides the `changelog` Action.
 
-## Usage
+- **Generate release notes in Chinese and English** from `feat` and `fix` commits.
+- Write the notes to `changelogs.json` and **open a draft PR for review**.
+- **Reuse an existing PR or draft** on subsequent runs, preserving manual edits.
 
-Enable GitHub Actions pull request creation and configure the `SHIPKIT_GEMINI_API_KEY` repository secret.
+## Getting started
 
-```yaml
-name: Prepare release notes
+1. Allow GitHub Actions to create PRs in the app repository and add the `LLM_API_KEY` repository secret.
+2. Copy the example to `.github/workflows/` in the app repository. Adjust the target branch if needed and verify that the Action tag in `uses` has been published. [Release notes workflow example](examples/release-notes.yml)
+3. In GitHub Actions, run **Prepare release notes** manually. Enter the base version and select a version bump if needed.
 
-on:
-  workflow_dispatch:
-    inputs:
-      version:
-        required: true
-      version_type:
-        type: choice
-        options: [none, major, minor, patch]
-        default: none
+For inputs, outputs, draft handling, branch cleanup, and app releases after merging the PR, see the [changelog Action documentation](docs/changelog.md).
 
-permissions:
-  contents: write
-  pull-requests: write
+## Agent setup prompt
 
-jobs:
-  notes:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: openchic/shipkit/actions/changelog@v1
-        with:
-          version: ${{ inputs.version }}
-          version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SHIPKIT_GEMINI_API_KEY: ${{ secrets.SHIPKIT_GEMINI_API_KEY }}
+```text
+Integrate the openchic/shipkit changelog Action into this app repository.
+Read shipkit's docs/changelog.md and examples/release-notes.yml, and verify the published Action tag.
+Use the existing workflows and version source. Follow the example for manual dispatch, permissions, secret references, and branch cleanup when a PR closes.
+Keep using the app's existing build and release workflows.
+Validate the changed YAML and explain how to configure LLM_API_KEY and run the workflow.
 ```
 
-`version` is required. When `version-type` is set, the result is bumped from it (for example `1.2.3` + `minor` → `1.3.0`). The action fetches missing history and tags itself; a checkout at the workspace root is required.
+## Development and maintenance
 
-The full workflow, including branch cleanup when the PR closes, is in [examples/release-notes.yml](examples/release-notes.yml).
-
-## Documentation
-
-- [Action contract](docs/changelog.md): inputs, outputs, reuse and drift rules, failure matrix.
-- [Example workflow](examples/release-notes.yml).
-- [CI checks](.github/workflows/test.yml).
-
-## Development
-
-Use Node.js 24 and pnpm 11.9.0 from the repository root. To build just changelog, run `pnpm --filter @shipkit/changelog build`.
-
-```bash
-pnpm install --frozen-lockfile
-pnpm check
-pnpm build
-pnpm test
-```
-
-## Release
-
-Run **Release** from `main` to publish an Action. See [the maintainer release flow (Chinese)](docs/changelog.md) for version selection, package version commits, tags and GitHub Release notes.
+See [AGENTS.md](AGENTS.md) for the repository layout, development commands, and contribution guidelines.
 
 ## License
 

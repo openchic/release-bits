@@ -8,6 +8,7 @@ import { prepare, type Inputs } from '../src/prepare.ts'
 import { evidence, generate, maxLength, validateNotes, warnings } from '../src/notes.ts'
 import { effectiveVersion } from '../src/version.ts'
 import { catalogPath } from '../src/catalog.ts'
+import { requiredEnv } from '../src/env.ts'
 
 const cwd = process.cwd()
 const notes = { 'zh-CN': ['修复了显示。'], en: ['Fixed display.'] }
@@ -60,6 +61,24 @@ test('version, evidence and bilingual style', () => {
   assert.throws(() => evidence([revert, original]), /No feat/)
   assert.equal(evidence([{ ...revert, sha: 'c'.repeat(40), body: 'This reverts commit ' + revert.sha }, revert, original]).count, 1)
   assert.throws(() => evidence([{ ...original, body: '文'.repeat(70_000) }]), /too large/)
+})
+
+test('requires the standardized credential environment variables', () => {
+  const names = ['GITHUB_TOKEN', 'LLM_API_KEY'] as const
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]))
+  try {
+    for (const name of names) {
+      delete process.env[name]
+      assert.throws(() => requiredEnv(name), new RegExp(`${name} is required`))
+      process.env[name] = 'test-secret'
+      assert.equal(requiredEnv(name), 'test-secret')
+    }
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name]
+      else process.env[name] = previous[name]
+    }
+  }
 })
 
 test('catalog aliases resolve inside the checkout, including for a new file', () => {
