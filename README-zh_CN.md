@@ -12,11 +12,11 @@ shipkit 当前提供 `changelog`：把 `feat` 和 `fix` 提交整理成中英双
 - 在 `changelogs/v{version}` 分支上创建或复用 draft PR；合并 PR 即确认说明。
 - 重复运行幂等：已有 PR、分支或草稿直接复用，不覆盖人工修改，也不重复调用 Gemini。
 - catalog 不写审核标志；草稿状态由分支和 PR 生命周期表达。
-- 清理、tag、GitHub Release、appcast 和打包仍留在 App 仓库。
+- App 的清理、tag、GitHub Release、appcast 和打包仍由 App 仓库负责；本仓库单独发布 Shipkit Action 自身的版本。
 
 ## 使用
 
-在仓库中配置 `SHIPKIT_GEMINI_API_KEY` secret，然后添加：
+在接入仓库允许 GitHub Actions 创建 PR，并配置 `SHIPKIT_GEMINI_API_KEY` secret。
 
 ```yaml
 name: Prepare release notes
@@ -39,12 +39,12 @@ jobs:
   notes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: openchic/shipkit/actions/changelog@v1
         with:
           version: ${{ inputs.version }}
-          version-type: ${{ inputs.version_type == 'none' && '' || inputs.version_type }}
+          version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           SHIPKIT_GEMINI_API_KEY: ${{ secrets.SHIPKIT_GEMINI_API_KEY }}
@@ -55,6 +55,8 @@ jobs:
 完整 workflow（含 PR 关闭后的分支清理）见 [examples/release-notes.yml](examples/release-notes.yml)。
 
 ## 本地预览
+
+使用 Node.js 24 运行仓库内的 CLI。
 
 ```bash
 export GEMINI_API_KEY=...
@@ -74,16 +76,18 @@ export GEMINI_API_KEY=...
 
 ## 开发
 
+在仓库根目录使用 Node.js 24 和 pnpm 11.9.0。单独构建 changelog 时运行 `pnpm --filter @shipkit/changelog build`。
+
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-PYTHONPATH=src python3 -m compileall -q src tests
+pnpm install --frozen-lockfile
+pnpm check
+pnpm build
+pnpm test
 ```
 
 ## 发布
 
-维护者在 `main` 上手动运行 **Release** workflow 并输入版本号。它会跑测试、创建版本 tag `vX.Y.Z`、移动 `vX` 大版本 tag，并创建 GitHub Release。
-
-调用方可以用 `@v1` 跟随最新 v1.x，固定 `@v1.y.z`，或固定到 commit SHA。请给 `v*` 开 tag 保护，限制谁能移动 `v1`。如果 tag 规则拦截 workflow token，允许 GitHub Actions 或改用具备 `contents: write` 的 token。见 [.github/workflows/release.yml](.github/workflows/release.yml)。
+在 `main` 上运行 **Release** 发布 Action。版本选择、`package.json` 提交、tag 和 GitHub Release 变更日志流程见 [维护者发布说明](docs/changelog.md)。
 
 ## License
 

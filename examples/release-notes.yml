@@ -24,12 +24,12 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: openchic/shipkit/actions/changelog@v1
         with:
           version: ${{ inputs.version }}
-          version-type: ${{ inputs.version_type == 'none' && '' || inputs.version_type }}
+          version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           SHIPKIT_GEMINI_API_KEY: ${{ secrets.SHIPKIT_GEMINI_API_KEY }}

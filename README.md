@@ -12,11 +12,11 @@ shipkit currently provides `changelog`: it turns `feat` and `fix` commits into a
 - Create or reuse a draft PR on `changelogs/v{version}`; merging the PR approves the notes.
 - Re-running is idempotent: existing PRs, branches, and drafts are reused without overwriting manual edits or calling Gemini again.
 - No review flag in the catalog; draft state is owned by the branch and PR lifecycle.
-- Cleanup, tagging, GitHub Releases, appcasts, and packaging remain in the app repository.
+- App cleanup, tags, GitHub Releases, appcasts, and packaging remain in the app repository; this repository separately publishes Shipkit Action versions.
 
 ## Usage
 
-Configure the `SHIPKIT_GEMINI_API_KEY` repository secret, then add:
+Enable GitHub Actions pull request creation and configure the `SHIPKIT_GEMINI_API_KEY` repository secret.
 
 ```yaml
 name: Prepare release notes
@@ -39,12 +39,12 @@ jobs:
   notes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: openchic/shipkit/actions/changelog@v1
         with:
           version: ${{ inputs.version }}
-          version-type: ${{ inputs.version_type == 'none' && '' || inputs.version_type }}
+          version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           SHIPKIT_GEMINI_API_KEY: ${{ secrets.SHIPKIT_GEMINI_API_KEY }}
@@ -55,6 +55,8 @@ jobs:
 The full workflow, including branch cleanup when the PR closes, is in [examples/release-notes.yml](examples/release-notes.yml).
 
 ## Local preview
+
+Use Node.js 24 to run the packaged CLI.
 
 ```bash
 export GEMINI_API_KEY=...
@@ -74,16 +76,18 @@ This writes preview files only; it does not update the catalog or create a PR.
 
 ## Development
 
+Use Node.js 24 and pnpm 11.9.0 from the repository root. To build just changelog, run `pnpm --filter @shipkit/changelog build`.
+
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-PYTHONPATH=src python3 -m compileall -q src tests
+pnpm install --frozen-lockfile
+pnpm check
+pnpm build
+pnpm test
 ```
 
 ## Release
 
-Maintainers run the **Release** workflow from `main` with an explicit version. It runs tests, creates a version tag `vX.Y.Z`, moves the `vX` major tag, and creates a GitHub Release.
-
-Consumers can use `@v1` for the latest v1.x, pin `@v1.y.z`, or pin a commit SHA. Protect `v*` tags so only maintainers can move `v1`. If tag rules block the workflow token, allow GitHub Actions or use a token with `contents: write`. See [.github/workflows/release.yml](.github/workflows/release.yml).
+Run **Release** from `main` to publish an Action. See [the maintainer release flow (Chinese)](docs/changelog.md) for version selection, package version commits, tags and GitHub Release notes.
 
 ## License
 

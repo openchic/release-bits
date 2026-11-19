@@ -6,7 +6,7 @@
 openchic/shipkit/actions/changelog@v1
 ```
 
-- 运行环境：`ubuntu-latest`，Python 3 标准库
+- 运行环境：`ubuntu-latest`，Node.js 24，GitHub Actions Toolkit
 - 权限：`contents: write`、`pull-requests: write`
 - 密钥：`SHIPKIT_GEMINI_API_KEY`
 - 只生成草稿，不在 catalog 里记录审核状态；合并 PR 是人工确认信号
@@ -36,12 +36,12 @@ jobs:
   notes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: openchic/shipkit/actions/changelog@v1
         with:
           version: ${{ inputs.version }}
-          version-type: ${{ inputs.version_type == 'none' && '' || inputs.version_type }}
+          version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           SHIPKIT_GEMINI_API_KEY: ${{ secrets.SHIPKIT_GEMINI_API_KEY }}
@@ -58,7 +58,7 @@ Actions -> Prepare release notes -> 填版本、选版本类型 -> Run
 
 重复运行是幂等的：已有 PR 直接返回链接，已有草稿不重复调用 Gemini。
 
-`actions/checkout` 默认浅克隆即可，action 会自动补拉历史和 tag；想减少一次网络往返可以加 `fetch-depth: 0`。
+`actions/checkout` 默认浅克隆即可，Action 会获取历史和 tag，也支持 `fetch-depth: 0`。
 
 action 假定仓库位于 workspace 根目录；不要用 `path:` 把仓库 checkout 到子目录。
 
@@ -128,17 +128,17 @@ release-notes-{version}.md
 ## 流程
 
 ```text
-1. 浅克隆时自动 fetch --unshallow --tags
-2. 解析结果版本，校验 X.Y.Z
-3. 计算分支 changelogs/v{version}
-4. 已有 open PR -> 输出链接，结束
+1. 解析结果版本，校验 X.Y.Z
+2. 计算分支 changelogs/v{version}
+3. 已有 open PR -> 输出链接，结束
+4. 获取 base 分支、发布分支和标签，浅克隆时补全历史
 5. 复用的分支上已有草稿：
      版本一致且高于 catalog 历史版本 -> 跳过 Gemini
      版本不一致 -> 失败
 6. 生成说明：提交筛选、Gemini、结构校验、风格警告
 7. 原子写入草稿
 8. 只提交 catalog，校验漂移
-9. 推送分支；没有 PR 时 gh pr create --draft
+9. 推送分支；通过 GitHub API 创建 draft PR
 10. 写输出和 step summary
 ```
 
@@ -149,8 +149,7 @@ release-notes-{version}.md
 | 分支已有 open PR | 直接返回该 PR，不生成、不覆盖 |
 | 远程分支存在、没有 open PR | 复用分支；空分支重新生成；已有历史但没有草稿的残留分支失败 |
 | 复用的分支上已有草稿 | 跳过 Gemini；版本必须与结果版本一致 |
-| 分支不存在且 catalog 无草稿 | 正常生成、提交、开 PR |
-| 分支不存在但 catalog 有草稿 | 失败，提示先审核或移除该草稿 |
+| 发布分支不存在 | 将 base 分支上的 catalog 视为已发布历史，校验版本后生成草稿并开 PR |
 
 任何情况下都不覆盖人工修改，不重复调用 Gemini。
 
@@ -249,9 +248,20 @@ cleanup:
 - 分支已不存在时返回 404，视为已完成；其他错误会打印原因并失败；
 - `changelogs/` 是公开契约，也是后续 job 识别 PR 的唯一稳定标识，不参数化。
 
-## 发布预留
+## changelog Action 版本发布（维护者）
 
-以后接发布时，在 App workflow 增加一个 job，条件固定：
+此流程发布 `changelog` Action 本身，与上面的 draft PR 合并流程分开。
+
+1. 在 `main` 上运行仓库的 **Release** workflow，选择 `changelog` 和 `major` / `minor` / `patch`（默认 `minor`）。
+2. workflow 在 `actions/changelog/` 下运行 `pnpm version`，从该 Action 当前的 `package.json` 版本递增；首次版本为 `0.0.0`，默认 `minor` 会得到 `0.1.0`。
+3. workflow 将新的 `package.json` 版本提交到 `main`，并原子推送固定版本标签（例如 `changelog-v1.1.0`）和对应的主版本快照标签（例如 `v1`）。快照只更新被发布的 Action，并保留其他 Action 已发布的目录。
+4. 固定标签与 `vN` 快照推送后，workflow 根据 `actions/changelog/` 中自上次发布以来的 Conventional Commit `feat` 和 `fix` 标题生成 GitHub Release 变更日志，并创建 Release。其他类型的提交不进入变更日志。
+
+消费者可以通过 `openchic/shipkit/actions/changelog@v1` 跟随主版本，或使用 `@changelog-v1.1.0` 固定具体版本。发布 workflow 需要 `contents: write`，且仓库规则必须允许它将版本提交推送到 `main`。
+
+## App 仓库中的后续版本发布预留
+
+如果 App 仓库之后要在 changelog PR 合并后触发自己的发布，在 App workflow 增加一个 job，条件固定：
 
 ```yaml
 if: >-
@@ -275,11 +285,11 @@ if: >-
 | 返回结构不符合 schema | 失败，不写文件 |
 | 分支已有历史但没有草稿，或草稿版本不一致 | 失败，提示删除残留分支 |
 | 生成期间 HEAD 变化或出现 catalog 之外的改动 | 失败，不推送 |
-| 浅克隆补拉失败 | 失败，提示保留 checkout 凭据或改用 `fetch-depth: 0` |
+| 浅克隆补拉失败 | 失败，检查 checkout 凭据与仓库访问权限 |
 
 ## 本地预览
 
-CLI 与 action 共用生成逻辑，只做预览：不写 catalog、不开 PR、不需要 `GH_TOKEN`。
+CLI 使用 Node.js，与 Action 共用生成逻辑，只做预览：不写 catalog、不开 PR、不需要 `GH_TOKEN`。
 
 ```bash
 export GEMINI_API_KEY=...
@@ -311,7 +321,7 @@ export GEMINI_API_KEY=...
 ## 安全与版本
 
 - `GH_TOKEN` 只放在 step 级 `env`；不启用 `set -x`，不打印 security/Gemini 输出；
-- 用 `github.token` 创建的 PR 不会触发其他 `pull_request` 自动化；本流程只依赖人工合并/关闭产生的 `closed` 事件，不受影响；
+- 接入仓库需允许 GitHub Actions 创建 PR。内置 token 创建或更新 PR 时，对应的 CI 运行可能需要写权限用户批准；
 - 只处理同仓库分支，fork PR 不继承凭据；
 - action 只写 catalog 和临时预览文件，不改其他仓库文件；
-- 消费方用 `@v1`，也可固定到 commit SHA；`v1` tag 需要保护。
+- 使用 `@v1` 跟随兼容版本，使用 `@changelog-v1.2.3` 或快照 commit SHA 固定版本。发布仅更新该主版本快照中的 changelog 目录。

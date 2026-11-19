@@ -33,45 +33,23 @@ inputs:
 outputs:
   pr-url:
     description: Draft pull request URL.
-    value: ${{ steps.run.outputs.pr-url }}
   pr-created:
     description: "true when this run created the pull request, false when it was reused."
-    value: ${{ steps.run.outputs.pr-created }}
   version:
     description: Effective version.
-    value: ${{ steps.run.outputs.version }}
   branch:
     description: Release branch name.
-    value: ${{ steps.run.outputs.branch }}
   source-sha:
     description: Head commit used for generation.
-    value: ${{ steps.run.outputs.source-sha }}
   commit-count:
     description: Commits that contributed evidence.
-    value: ${{ steps.run.outputs.commit-count }}
   warning-count:
     description: Style warnings found in the final notes.
-    value: ${{ steps.run.outputs.warning-count }}
   notes-json-path:
     description: Absolute path to the preview JSON.
-    value: ${{ steps.run.outputs.notes-json-path }}
   notes-markdown-path:
     description: Absolute path to the preview Markdown.
-    value: ${{ steps.run.outputs.notes-markdown-path }}
 
 runs:
-  using: composite
-  steps:
-    - id: run
-      shell: bash
-      env:
-        PYTHONPATH: ${{ github.action_path }}/../../src
-        SHIPKIT_VERSION: ${{ inputs.version }}
-        SHIPKIT_VERSION_TYPE: ${{ inputs.version-type }}
-        SHIPKIT_CATALOG_PATH: ${{ inputs.catalog-path }}
-        SHIPKIT_BASE_BRANCH: ${{ inputs.base-branch }}
-        SHIPKIT_BASE_REF: ${{ inputs.base-ref }}
-        SHIPKIT_MAX_CHARS: ${{ inputs.max-chars }}
-        SHIPKIT_MODEL: ${{ inputs.model }}
-        GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      run: python3 -m shipkit changelog-pr
+  using: node24
+  main: dist/index.mjs

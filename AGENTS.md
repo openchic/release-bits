@@ -4,27 +4,21 @@
 
 ## 命令
 
+从仓库根目录运行，`actions/*` 共用一份 pnpm 锁文件。
+
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v      # 单测
-./bin/shipkit changelog --version 1.2.3 [--version-type minor] # 本地预览，需要 GEMINI_API_KEY
-PYTHONPATH=src python3 -m compileall -q src tests            # 语法检查
+pnpm install --frozen-lockfile
+pnpm check
+pnpm build
+pnpm test
+./bin/shipkit changelog --version 1.2.3
 ```
 
-`shipkit` 命令名不变：`python3 -m shipkit` 与 `./bin/shipkit` 都必须可用。
+本地预览使用 Node.js 24，通过 `./bin/shipkit` 调用打包后的 CLI。
 
 ## 结构
 
-```text
-actions/changelog/action.yml    action 元数据
-src/shipkit.py                  命令入口，只做分发
-src/changelog/                  changelog 实现（errors/gitutils 暂放这里）
-bin/shipkit                     本地命令
-docs/changelog.md               action 契约
-examples/release-notes.yml      接入示例
-tests/                          单元测试
-```
-
-后续 action 以子命令接到 `src/shipkit.py`，实现放 `src/<feature>/`；出现第二个 action 时再抽公共模块。
+每个 Action 放在 `actions/<name>/`。changelog 的 TypeScript 源码、测试和产物分别位于该目录的 `src/`、`test/`、`dist/`。`scripts/release.mjs` 将指定目录提升到对应主版本的快照。
 
 ## 行为
 
@@ -38,12 +32,12 @@ tests/                          单元测试
 
 ## 约定
 
-- 代码按功能放 `src/<feature>/`；`src/shipkit.py` 不放业务逻辑。
+- Action 内按职责组织代码，命令入口只做分发。
 - 不读配置文件，不加可选开关；不重新引入 `reviewed`、`product-name`、`terminology`、`strict-style`。
 - 输入输出用 kebab-case；密钥只走环境变量，不打印、不进命令行。
 - 行为变化补测试，覆盖版本、复用、漂移；改 action 或示例后做一次 YAML 解析。
 - 文档以 `docs/changelog.md` 为准，改行为时同步更新。
-- 发布用 `.github/workflows/release.yml`：测试 → `vX.Y.Z` → 移动 `vX` → GitHub Release；action 版本是 git tag，不写 action.yml。
+- Action 发布流程以 `docs/changelog.md` 的维护者发布说明为准；Action 版本是 git tag，不写 action.yml。
 - 真实 PR 和 Gemini 调用无法本地验证时，明确说明。
 
 ## Skills
