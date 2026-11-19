@@ -1,0 +1,55 @@
+name: changelog
+description: Generate bilingual release notes, write a catalog draft, and create or reuse a draft pull request.
+
+inputs:
+  version:
+    description: Base version in X.Y.Z format.
+    required: true
+  version-type:
+    description: Bump type (major, minor, patch). Empty uses version as-is.
+    required: false
+    default: ""
+  catalog-path:
+    description: Catalog file to update.
+    required: false
+    default: changelogs.json
+  base-branch:
+    description: Pull request base branch. Defaults to the repository default branch.
+    required: false
+    default: ""
+  base-ref:
+    description: Commit range start. Defaults to the latest reachable tag.
+    required: false
+    default: ""
+  max-chars:
+    description: Chinese length target for each note.
+    required: false
+    default: "50"
+  model:
+    description: Gemini model name.
+    required: false
+    default: gemini-3.5-flash-lite
+
+outputs:
+  pr-url:
+    description: Draft pull request URL.
+  pr-created:
+    description: "true when this run created the pull request, false when it was reused."
+  version:
+    description: Effective version.
+  branch:
+    description: Release branch name.
+  source-sha:
+    description: Head commit used for generation.
+  commit-count:
+    description: Commits that contributed evidence.
+  warning-count:
+    description: Style warnings found in the final notes.
+  notes-json-path:
+    description: Absolute path to the preview JSON.
+  notes-markdown-path:
+    description: Absolute path to the preview Markdown.
+
+runs:
+  using: node24
+  main: dist/index.mjs
