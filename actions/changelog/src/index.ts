@@ -1,12 +1,12 @@
 import * as core from '@actions/core'
 import { context, getOctokit } from '@actions/github'
+import { requiredEnv } from './env.ts'
 import { DEFAULT_MODEL } from './gemini.ts'
 import { maxLength } from './notes.ts'
 import { prepare } from './prepare.ts'
 
 async function run() {
-  const token = process.env.GH_TOKEN
-  if (!token) throw new Error('GH_TOKEN is required')
+  const token = requiredEnv('GITHUB_TOKEN')
   const base = core.getInput('base-branch') || context.payload.repository?.default_branch || 'main'
   const api = getOctokit(token, { request: { timeout: 120_000 } })
   const repo = context.repo

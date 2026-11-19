@@ -34141,6 +34141,13 @@ function getOctokit(token, options, ...additionalPlugins) {
     return new GitHubWithPlugins(getOctokitOptions(token, options));
 }
 
+function requiredEnv(name) {
+    const value = process.env[name];
+    if (!value)
+        throw new Error(`${name} is required`);
+    return value;
+}
+
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const list = { type: 'ARRAY', items: { type: 'STRING' } };
 const responseSchema = {
@@ -34149,9 +34156,7 @@ const responseSchema = {
         } },
 };
 async function requestNotes(prompt, model) {
-    const key = process.env.SHIPKIT_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!key)
-        throw new Error('SHIPKIT_GEMINI_API_KEY is required');
+    const key = requiredEnv('LLM_API_KEY');
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
         encodeURIComponent(model) + ':generateContent';
     const response = await fetch(url, {
@@ -34490,9 +34495,7 @@ async function prepare(input, pulls, generateNotes = generate) {
 }
 
 async function run() {
-    const token = process.env.GH_TOKEN;
-    if (!token)
-        throw new Error('GH_TOKEN is required');
+    const token = requiredEnv('GITHUB_TOKEN');
     const base = getInput('base-branch') || context.payload.repository?.default_branch || 'main';
     const api = getOctokit(token, { request: { timeout: 120_000 } });
     const repo = context.repo;
