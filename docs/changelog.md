@@ -68,11 +68,19 @@ GitHub Actions 输入均为字符串。
 
 预览文件写在 runner 临时目录，文件名为 `release-notes-{version}.json` 和 `release-notes-{version}.md`。直接返回已有 PR 时，`commit-count` 和 `warning-count` 均为 `0`，`source-sha` 和预览路径为空。
 
+### 运行摘要
+
+成功后，Action 在 GitHub Actions 的 Summary 中展示 PR 新建或复用状态、草稿分支，并将 `Please review the PR. Merging it approves the release notes.` 作为 PR 链接。生成或复用分支草稿时，还会展示最终双语说明。
+
+准备失败时不写入成功摘要。摘要写入失败仅报告 warning，不影响已完成的 PR 操作和 outputs。
+
 ## 草稿生成与复用
 
 ### 复用顺序
 
 Action 使用 `changelogs/v{version}` 分支，并按下表的顺序处理。
+
+新建 draft PR 的标题为 `chore(release): add v{version} release notes`，其中版本为计算后的结果版本。
 
 | 状态 | 处理 |
 | --- | --- |

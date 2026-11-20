@@ -4,6 +4,7 @@ import { requiredEnv } from './env.ts'
 import { DEFAULT_MODEL } from './gemini.ts'
 import { maxLength } from './notes.ts'
 import { prepare } from './prepare.ts'
+import { writeSummary } from './summary.ts'
 
 async function run() {
   const token = requiredEnv('GITHUB_TOKEN')
@@ -26,6 +27,7 @@ async function run() {
   })
   for (const [name, value] of Object.entries(result.outputs)) core.setOutput(name, value)
   for (const message of result.warnings) core.warning(message)
+  await writeSummary(result.outputs)
 }
 
 run().catch((error: unknown) => core.setFailed(error instanceof Error ? error.message : String(error)))

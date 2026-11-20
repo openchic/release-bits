@@ -83,7 +83,7 @@ export async function prepare(input: Inputs, pulls: PullRequests, generateNotes 
   const body = '## Release notes v' + version + '\n\n' + markdown(result.notes) +
     '\n\n---\n\nMerging this PR approves the release notes.\n'
   try {
-    outputs['pr-url'] = await pulls.create(branch, 'docs: review v' + version + ' release notes', body)
+    outputs['pr-url'] = await pulls.create(branch, 'chore(release): add v' + version + ' release notes', body)
     outputs['pr-created'] = true
   } catch (error) {
     const concurrent = await pulls.find(branch)
