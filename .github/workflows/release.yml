@@ -22,6 +22,8 @@ jobs:
   verify:
     if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/test.yml
+    with:
+      skip-action-smoke-test: true
 
   publish:
     needs: verify
@@ -41,7 +43,7 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Promote tested action and publish release
+      - name: Publish selected action
         env:
           ACTION: ${{ inputs.action }}
           VERSION_TYPE: ${{ inputs.version-type }}

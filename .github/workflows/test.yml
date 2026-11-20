@@ -1,10 +1,30 @@
-name: test
+name: Test actions
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'actions/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
   pull_request:
+    paths:
+      - 'actions/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
   workflow_call:
+    inputs:
+      skip-action-smoke-test:
+        description: Skip the packaged Action smoke steps when the release workflow runs the verification suite.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -19,22 +39,24 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
-      - name: Verify workspace and distributions
+      - name: Verify action workspace
         run: |
           pnpm install --frozen-lockfile
           pnpm check
           pnpm build
           pnpm test
           test -z "$(git status --porcelain --untracked-files=all -- ':(glob)actions/*/dist/**')"
-      - name: Exercise the packaged action
+      - name: Verify packaged action
         id: notes
+        if: ${{ !inputs.skip-action-smoke-test }}
         uses: ./actions/changelog
         with:
           version: 1.2.3
         env:
           GITHUB_TOKEN: fixture
           NODE_OPTIONS: --import=${{ github.workspace }}/actions/changelog/test/mock-github.mjs
-      - name: Verify runner outputs
+      - name: Verify action outputs
+        if: ${{ !inputs.skip-action-smoke-test }}
         env:
           OUTPUTS: ${{ toJSON(steps.notes.outputs) }}
         run: |

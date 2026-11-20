@@ -80,7 +80,7 @@ GitHub Actions 输入均为字符串。
 
 Action 使用 `changelogs/v{version}` 分支，并按下表的顺序处理。
 
-新建 draft PR 的标题为 `chore(release): add v{version} release notes`，其中版本为计算后的结果版本。
+新建 draft PR 的标题与新生成 catalog 提交的 commit subject 一致，均为 `chore(release): add v{version} release notes`，其中版本为计算后的结果版本。复用已有分支草稿时保留原有提交标题。
 
 | 状态 | 处理 |
 | --- | --- |

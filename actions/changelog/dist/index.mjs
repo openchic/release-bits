@@ -34677,6 +34677,7 @@ function verifyChanges(source, path) {
 /** Prepare release notes in the checked-out consumer repository. */
 async function prepare(input, pulls, generateNotes = generate) {
     const version = effectiveVersion(input.version, input.bump);
+    const title = 'chore(release): add v' + version + ' release notes';
     const branch = 'changelogs/v' + version;
     const existing = await pulls.find(branch);
     const outputs = {
@@ -34732,7 +34733,7 @@ async function prepare(input, pulls, generateNotes = generate) {
             version, ...(input.bump && { version_type: input.bump }), source_sha: source, notes: result.notes,
         }, current);
         git('--literal-pathspecs', 'add', '--', path);
-        git('--literal-pathspecs', '-c', 'user.name=github-actions[bot]', '-c', 'user.email=github-actions[bot]@users.noreply.github.com', '-c', 'commit.gpgsign=false', 'commit', '--only', '-m', 'docs: prepare v' + version + ' release notes', '--', path);
+        git('--literal-pathspecs', '-c', 'user.name=github-actions[bot]', '-c', 'user.email=github-actions[bot]@users.noreply.github.com', '-c', 'commit.gpgsign=false', 'commit', '--only', '-m', title, '--', path);
         verifyChanges(source, path);
         git('push', 'origin', 'HEAD:refs/heads/' + branch);
     }
@@ -34741,7 +34742,7 @@ async function prepare(input, pulls, generateNotes = generate) {
     const body = '## Release notes v' + version + '\n\n' + markdown(result.notes) +
         '\n\n---\n\nMerging this PR approves the release notes.\n';
     try {
-        outputs['pr-url'] = await pulls.create(branch, 'chore(release): add v' + version + ' release notes', body);
+        outputs['pr-url'] = await pulls.create(branch, title, body);
         outputs['pr-created'] = true;
     }
     catch (error) {
