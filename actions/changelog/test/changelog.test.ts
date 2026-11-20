@@ -89,14 +89,24 @@ test('catalog aliases resolve inside the checkout, including for a new file', ()
 })
 
 test('open PR returns all nine outputs without model or checkout operations', async () => {
-  const result = await prepare(input, { ...pulls, find: async () => url })
+  const result = await prepare(input, {
+    find: async () => url,
+    create: async () => { throw new Error('unexpected PR creation') },
+  })
   assert.deepEqual(result.outputs, { version: '1.1.0', branch: 'changelogs/v1.1.0', 'pr-url': url,
     'pr-created': false, 'source-sha': '', 'commit-count': 0, 'warning-count': 0,
     'notes-json-path': '', 'notes-markdown-path': '' })
 })
 
 test('generate and push only catalog, then reuse human-edited draft without model', async () => {
-  const result = await prepare(input, pulls, fake)
+  const titles: string[] = []
+  const checkedPulls = { ...pulls, create: async (branch: string, title: string) => {
+    assert.equal(branch, 'changelogs/v1.1.0')
+    titles.push(title)
+    return url
+  } }
+  const result = await prepare(input, checkedPulls, fake)
+  assert.deepEqual(titles, ['chore(release): add v1.1.0 release notes'])
   assert.equal(result.outputs['pr-created'], true)
   assert.equal(result.outputs['commit-count'], 1)
   assert.deepEqual(JSON.parse(readFileSync(result.outputs['notes-json-path'], 'utf8')).notes, notes)
@@ -108,10 +118,25 @@ test('generate and push only catalog, then reuse human-edited draft without mode
   commit('changelogs.json', edited, 'docs: edit draft')
   git('push', 'origin', 'HEAD:refs/heads/' + branch)
   git('switch', 'main')
-  const reused = await prepare(input, pulls, async () => { throw new Error('unexpected generation') })
+  const reused = await prepare(input, checkedPulls, async () => { throw new Error('unexpected generation') })
+  assert.deepEqual(titles, Array(2).fill('chore(release): add v1.1.0 release notes'))
   assert.equal(reused.outputs['commit-count'], 0)
   assert.equal(reused.outputs['warning-count'], 2)
   assert.equal(readFileSync('changelogs.json', 'utf8'), edited)
+})
+
+test('new PR title uses an explicit version without an increment', async () => {
+  commit('changelogs.json', '[]\n', 'docs: reset release history')
+  git('push', 'origin', 'main')
+  const result = await prepare({ ...input, version: '0.1.0', bump: '' }, {
+    ...pulls,
+    create: async (branch, title) => {
+      assert.equal(branch, 'changelogs/v0.1.0')
+      assert.equal(title, 'chore(release): add v0.1.0 release notes')
+      return url
+    },
+  }, fake)
+  assert.equal(result.outputs['pr-created'], true)
 })
 
 test('reject published version and scope/history drift', async () => {
