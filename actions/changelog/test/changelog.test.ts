@@ -107,6 +107,7 @@ test('generate and push only catalog, then reuse human-edited draft without mode
   } }
   const result = await prepare(input, checkedPulls, fake)
   assert.deepEqual(titles, ['chore(release): add v1.1.0 release notes'])
+  assert.equal(git('log', '-1', '--format=%s'), titles[0])
   assert.equal(result.outputs['pr-created'], true)
   assert.equal(result.outputs['commit-count'], 1)
   assert.deepEqual(JSON.parse(readFileSync(result.outputs['notes-json-path'], 'utf8')).notes, notes)
@@ -120,6 +121,7 @@ test('generate and push only catalog, then reuse human-edited draft without mode
   git('switch', 'main')
   const reused = await prepare(input, checkedPulls, async () => { throw new Error('unexpected generation') })
   assert.deepEqual(titles, Array(2).fill('chore(release): add v1.1.0 release notes'))
+  assert.equal(git('log', '-1', '--format=%s'), 'docs: edit draft')
   assert.equal(reused.outputs['commit-count'], 0)
   assert.equal(reused.outputs['warning-count'], 2)
   assert.equal(readFileSync('changelogs.json', 'utf8'), edited)
