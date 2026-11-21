@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import * as catalog from './catalog.ts'
 import { git, gitResult, head } from './git.ts'
 import { generate, markdown, preview, validateNotes, warnings } from './notes.ts'
-import { BUMPS, effectiveVersion } from './version.ts'
+import { BUMPS, effectiveVersion } from '../../shared/version.mts'
 
 export type Inputs = {
   version: string, bump: string, catalog: string, base: string, since: string, max: number, model: string,

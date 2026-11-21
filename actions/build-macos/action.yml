@@ -1,0 +1,44 @@
+name: Build macOS
+description: Build, sign and notarize macOS disk images
+inputs:
+  project-path:
+    description: Xcode project or workspace relative to the repository
+    required: false
+  scheme:
+    description: Scheme that builds the macOS app
+    required: false
+  app-name:
+    description: App product name without .app
+    required: false
+  version:
+    description: Final app version, or base version when version-type is set
+    required: false
+  version-type:
+    description: Increment major, minor or patch. Required when version is omitted
+    required: false
+  build-mode:
+    description: Xcode build configuration
+    required: false
+    default: Release
+  universal:
+    description: Build a Universal disk image
+    required: false
+  intel:
+    description: Build an Intel disk image
+    required: false
+  apple-silicon:
+    description: Build an Apple Silicon disk image
+    required: false
+  entitlements-path:
+    description: Main app signing entitlements relative to the repository
+    required: false
+outputs:
+  version:
+    description: Final app version shared by all verified disk images
+  packages-json:
+    description: JSON array of verified disk images
+
+runs:
+  using: node24
+  main: dist/index.mjs
+  post: dist/post.mjs

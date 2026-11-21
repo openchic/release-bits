@@ -6,13 +6,12 @@
 
 ## 功能
 
-ReleaseBits 目前提供 `changelog` Action。
-
 - 从 `feat` 和 `fix` 提交**生成中英双语发布说明**。
 - 将说明写入 `changelogs.json`，**创建草稿 PR 供审核**。
 - 重复运行时**复用已有 PR 或草稿**，保留人工修改。
+- 构建、签名并公证 Universal、Intel 或 Apple Silicon 的 DMG。[build-macos Action](docs/build-macos.md)
 
-## 接入
+## 接入 · changelog
 
 1. 在 App 仓库允许 GitHub Actions 创建 PR，并配置 `LLM_API_KEY` 仓库密钥。
 2. 将示例复制到 App 仓库的 `.github/workflows/`，按需调整目标分支，并确认 `uses` 引用的 Action tag 已发布。[release-notes workflow 示例](examples/release-notes.yml)

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepare, type Inputs } from '../src/prepare.ts'
 import { evidence, generate, maxLength, validateNotes, warnings } from '../src/notes.ts'
-import { effectiveVersion } from '../src/version.ts'
+import { effectiveVersion } from '../../shared/version.mts'
 import { catalogPath } from '../src/catalog.ts'
 import { requiredEnv } from '../src/env.ts'
 

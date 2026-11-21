@@ -2,9 +2,9 @@
 
 ## 仓库结构
 
-- 每个 Action 位于 `actions/<name>/`。`changelog` 的源码、测试和构建产物分别在 `src/`、`test/` 和 `dist/`。
+- 每个 Action 位于 `actions/<name>/`。源码、测试和构建产物分别在 `src/`、`tests/` 和 `dist/`。`dist/` 在发布时构建，只进入版本快照。
 - `scripts/release.mjs` 管理 Action 的发布快照，版本由 Git tag 标识。
-- `changelog` 的使用契约和维护者发布流程以 [docs/changelog.md](docs/changelog.md) 为准。变更 Action 行为时同步更新文档及相关示例。
+- `changelog` 的使用契约和维护者发布流程以 [docs/changelog.md](docs/changelog.md) 为准。`build-macos` 的使用契约见 [docs/build-macos.md](docs/build-macos.md)。变更 Action 行为时同步更新文档及相关示例。
 
 ## 开发与验证
 

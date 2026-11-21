@@ -6,7 +6,7 @@ on:
       action:
         description: Action to publish
         type: choice
-        options: [changelog]
+        options: [changelog, build-macos]
         required: true
       version-type:
         description: Semantic version increment
@@ -23,6 +23,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/test.yml
     with:
+      action: ${{ inputs.action }}
       skip-action-smoke-test: true
 
   publish:
@@ -43,6 +44,12 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install release dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build selected action
+        env:
+          ACTION: ${{ inputs.action }}
+        run: pnpm --filter "@release-bits/${ACTION}" build
       - name: Publish selected action
         env:
           ACTION: ${{ inputs.action }}

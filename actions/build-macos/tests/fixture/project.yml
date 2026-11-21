@@ -1,0 +1,50 @@
+name: Sample
+options:
+  deploymentTarget:
+    macOS: "12.0"
+targets:
+  Sample:
+    type: application
+    platform: macOS
+    sources: [main.c]
+    dependencies:
+      - target: SampleKit
+        embed: true
+      - target: Worker
+        embed: true
+      - target: Share
+        embed: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.example.sample
+      GENERATE_INFOPLIST_FILE: YES
+      MARKETING_VERSION: 2.4.0
+      CURRENT_PROJECT_VERSION: 108
+      CODE_SIGN_ENTITLEMENTS: Sample.entitlements
+
+  SampleKit:
+    type: framework
+    platform: macOS
+    sources: [library.c]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.example.sample.kit
+      GENERATE_INFOPLIST_FILE: YES
+      CURRENT_PROJECT_VERSION: 1
+  Worker:
+    type: xpc-service
+    platform: macOS
+    sources: [main.c]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.example.sample.worker
+      GENERATE_INFOPLIST_FILE: YES
+      CODE_SIGN_ENTITLEMENTS: Worker.entitlements
+  Share:
+    type: app-extension
+    dependencies:
+      - sdk: Foundation.framework
+    platform: macOS
+    sources: [main.c]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.example.sample.share
+      INFOPLIST_FILE: Share-Info.plist
+      MARKETING_VERSION: 2.4.0
+      CURRENT_PROJECT_VERSION: 108

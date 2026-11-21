@@ -8,6 +8,34 @@ importers:
 
   .: {}
 
+  actions/build-macos:
+    dependencies:
+      '@actions/core':
+        specifier: ^3.0.1
+        version: 3.0.1
+    devDependencies:
+      '@rollup/plugin-commonjs':
+        specifier: ^29.0.3
+        version: 29.0.3(rollup@4.68.5)
+      '@rollup/plugin-node-resolve':
+        specifier: ^16.0.3
+        version: 16.0.3(rollup@4.68.5)
+      '@rollup/plugin-typescript':
+        specifier: ^12.3.1
+        version: 12.3.1(rollup@4.68.5)(tslib@2.9.1)(typescript@5.9.3)
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      rollup:
+        specifier: ^4.68.5
+        version: 4.68.5
+      tslib:
+        specifier: ^2.9.1
+        version: 2.9.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   actions/changelog:
     dependencies:
       '@actions/core':
@@ -20,9 +48,6 @@ importers:
       '@rollup/plugin-commonjs':
         specifier: ^29.0.3
         version: 29.0.3(rollup@4.68.5)
-      '@rollup/plugin-json':
-        specifier: ^6.1.0
-        version: 6.1.0(rollup@4.68.5)
       '@rollup/plugin-node-resolve':
         specifier: ^16.0.3
         version: 16.0.3(rollup@4.68.5)
@@ -118,15 +143,6 @@ packages:
     engines: {node: '>=16.0.0 || 14 >= 14.17'}
     peerDependencies:
       rollup: ^2.68.0||^3.0.0||^4.0.0
-    peerDependenciesMeta:
-      rollup:
-        optional: true
-
-  '@rollup/plugin-json@6.1.0':
-    resolution: {integrity: sha512-EGI2te5ENk1coGeADSIwZ7G2Q8CJS2sF120T7jLw4xFw9n7wIOXHo+kIYRAoVpJAN+kmqZSoO3Fp4JtoNF4ReA==}
-    engines: {node: '>=14.0.0'}
-    peerDependencies:
-      rollup: ^1.20.0||^2.0.0||^3.0.0||^4.0.0
     peerDependenciesMeta:
       rollup:
         optional: true
@@ -517,12 +533,6 @@ snapshots:
       is-reference: 1.2.1
       magic-string: 0.30.21
       picomatch: 4.0.7
-    optionalDependencies:
-      rollup: 4.68.5
-
-  '@rollup/plugin-json@6.1.0(rollup@4.68.5)':
-    dependencies:
-      '@rollup/pluginutils': 5.5.1(rollup@4.68.5)
     optionalDependencies:
       rollup: 4.68.5
 

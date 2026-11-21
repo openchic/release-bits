@@ -1,0 +1,73 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Final version with none, or base version for an increment (defaults to the Xcode base)
+        type: string
+      version-type:
+        description: Select none to use the supplied version directly
+        type: choice
+        options: [patch, minor, major, none]
+        default: patch
+      universal:
+        description: Universal (Intel and Apple Silicon)
+        type: boolean
+        default: true
+      intel:
+        description: Intel
+        type: boolean
+        default: false
+      apple-silicon:
+        description: Apple Silicon
+        type: boolean
+        default: false
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.0.1'
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: src
+        run: xcodegen generate
+
+      - name: Build, sign and notarize DMGs
+        id: package
+        uses: openchic/release-bits/actions/build-macos@v1
+        with:
+          project-path: src/MyApp.xcodeproj
+          scheme: MyApp
+          version: ${{ inputs.version }}
+          version-type: ${{ inputs.version-type != 'none' && inputs.version-type || '' }}
+          universal: ${{ inputs.universal }}
+          intel: ${{ inputs.intel }}
+          apple-silicon: ${{ inputs.apple-silicon }}
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_DEVELOPER_ID_PROVISIONING_PROFILE: ${{ secrets.APPLE_DEVELOPER_ID_PROVISIONING_PROFILE }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+
+      - name: Upload DMGs
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmgs
+          path: ${{ join(fromJSON(steps.package.outputs.packages-json).*.path, fromJSON('"\n"')) }}
+          if-no-files-found: error

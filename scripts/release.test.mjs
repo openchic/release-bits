@@ -33,7 +33,7 @@ function repository(t) {
   }
   const git = (...args) => run('git', '-c', 'commit.gpgsign=false', ...args)
   const commit = (message) => {
-    git('add', 'actions')
+    git('add', '.gitignore', 'actions')
     git('commit', '-m', message)
   }
   function promote(action, type) {
@@ -45,15 +45,17 @@ function repository(t) {
   git('init', '-b', 'main')
   git('init', '--bare', remoteRoot)
   git('remote', 'add', 'origin', remoteRoot)
+  writeFileSync(join(root, '.gitignore'), 'actions/*/dist/\n')
   for (const name of ['changelog', 'build-ios', 'build-macos']) {
     const directory = join(root, 'actions', name)
-    mkdirSync(directory, { recursive: true })
+    mkdirSync(join(directory, 'dist'), { recursive: true })
     writeFileSync(join(directory, 'action.yml'), 'name: ' + name + '\n')
     writeFileSync(join(directory, 'package.json'), JSON.stringify({
       name: '@shipkit/' + name,
       version: '0.0.0',
       private: true,
     }, null, 2) + '\n')
+    writeFileSync(join(directory, 'dist/index.mjs'), name + ' bundle\n')
     writeFileSync(join(directory, 'old'), 'first')
   }
   commit('feat(changelog): add release notes')
@@ -67,9 +69,10 @@ test('promotion commits pnpm version, creates feat and fix notes, and preserves 
   const first = promote('changelog', 'major')
   assert.equal(first.tag, 'changelog-v1.0.0')
   assert.match(first.notes, /## Features\n\n- add release notes/)
+  git('fetch', '--tags', 'origin', 'main')
+  assert.equal(git('show', 'changelog-v1.0.0:actions/changelog/dist/index.mjs'), 'changelog bundle')
   assert.match(git('log', '-1', '--format=%B', 'HEAD'), /Shipkit-version: 1.0.0/)
   assert.equal(JSON.parse(readFileSync(join(root, 'actions/changelog/package.json'), 'utf8')).version, '1.0.0')
-  git('fetch', 'origin', 'main')
   assert.equal(git('rev-parse', 'refs/remotes/origin/main'), first.source)
 
   git('checkout', '--detach', initialSource)

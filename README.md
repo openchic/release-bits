@@ -6,13 +6,12 @@
 
 ## Features
 
-ReleaseBits currently provides the `changelog` Action.
-
 - **Generate release notes in Chinese and English** from `feat` and `fix` commits.
 - Write the notes to `changelogs.json` and **open a draft PR for review**.
 - **Reuse an existing PR or draft** on subsequent runs, preserving manual edits.
+- Build, sign and notarize macOS disk images for Intel, Apple Silicon or both. [build-macos Action](docs/build-macos.md)
 
-## Getting started
+## Getting started · changelog
 
 1. Allow GitHub Actions to create PRs in the app repository and add the `LLM_API_KEY` repository secret.
 2. Copy the example to `.github/workflows/` in the app repository. Adjust the target branch if needed and verify that the Action tag in `uses` has been published. [Release notes workflow example](examples/release-notes.yml)

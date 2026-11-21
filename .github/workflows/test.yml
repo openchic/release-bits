@@ -20,8 +20,13 @@ on:
       - 'pnpm-workspace.yaml'
   workflow_call:
     inputs:
+      action:
+        description: Run release verification for one action. Empty runs the full workspace.
+        required: false
+        type: string
+        default: ''
       skip-action-smoke-test:
-        description: Skip the packaged Action smoke steps when the release workflow runs the verification suite.
+        description: Skip the packaged changelog Action smoke check when the caller verifies it separately.
         required: false
         type: boolean
         default: false
@@ -31,6 +36,8 @@ permissions:
 
 jobs:
   changelog:
+    name: Changelog action
+    if: ${{ inputs.action == '' || inputs.action == 'changelog' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -39,14 +46,17 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
-      - name: Verify action workspace
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm check
-          pnpm build
-          pnpm test
-          test -z "$(git status --porcelain --untracked-files=all -- ':(glob)actions/*/dist/**')"
-      - name: Verify packaged action
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check changelog action types
+        run: pnpm --filter @release-bits/changelog check
+      - name: Build changelog action
+        run: pnpm --filter @release-bits/changelog build
+      - name: Verify changelog action tests
+        run: pnpm --filter @release-bits/changelog test
+      - name: Verify release script
+        run: node --test scripts/release.test.mjs
+      - name: Verify packaged changelog action
         id: notes
         if: ${{ !inputs.skip-action-smoke-test }}
         uses: ./actions/changelog
@@ -54,8 +64,8 @@ jobs:
           version: 1.2.3
         env:
           GITHUB_TOKEN: fixture
-          NODE_OPTIONS: --import=${{ github.workspace }}/actions/changelog/test/mock-github.mjs
-      - name: Verify action outputs
+          NODE_OPTIONS: --import=${{ github.workspace }}/actions/changelog/tests/mock-github.mjs
+      - name: Verify changelog outputs
         if: ${{ !inputs.skip-action-smoke-test }}
         env:
           OUTPUTS: ${{ toJSON(steps.notes.outputs) }}
@@ -65,3 +75,25 @@ jobs:
             "pr-created":"false","source-sha":"","commit-count":"0","warning-count":"0",
             "notes-json-path":"","notes-markdown-path":""
           }' <<< "$OUTPUTS"
+
+  macos:
+    name: macOS action
+    if: ${{ inputs.action == '' || inputs.action == 'build-macos' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v6
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check macOS action types
+        run: pnpm --filter @release-bits/build-macos check
+      - name: Build macOS action
+        run: pnpm --filter @release-bits/build-macos build
+      - name: Verify macOS builds and signing tools
+        run: pnpm --filter @release-bits/build-macos test
+      - name: Verify release script
+        if: ${{ inputs.action == 'build-macos' }}
+        run: node --test scripts/release.test.mjs

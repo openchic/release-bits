@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 function git(args, input) {
@@ -26,6 +26,27 @@ function readTree(ref) {
 function writeTree(entries) {
   const records = Array.from(entries.values(), (record) => record + '\0').join('')
   return git(['mktree', '-z'], Buffer.from(records, 'latin1')).trim()
+}
+
+function snapshotActionTree(packagePath) {
+  const distPath = packagePath + '/dist'
+  if (git(['diff', '--cached', '--name-only']).trim()) {
+    throw new Error('Release index must be clean before staging generated dist')
+  }
+  git(['add', '-f', '--', distPath])
+  try {
+    const stagedTree = git(['write-tree']).trim()
+    return sha(stagedTree + ':' + packagePath)
+  } finally {
+    git(['reset', '--quiet', 'HEAD', '--', distPath])
+  }
+}
+
+function requireBuiltAction(packagePath) {
+  const distPath = packagePath + '/dist'
+  if (!existsSync(distPath) || !readdirSync(distPath).length) {
+    throw new Error('Build the selected Action before publishing')
+  }
 }
 
 function readPackage(ref, path) {
@@ -79,8 +100,12 @@ function promote(action, versionType, sourceRef) {
 
   const source = sha(sourceRef + '^{commit}')
   if (sha('HEAD') !== source) throw new Error('Checkout must match the source commit')
+  if (git(['diff', '--cached', '--name-only']).trim()) {
+    throw new Error('Release checkout must have a clean Git index')
+  }
   const packagePath = 'actions/' + action
   git(['cat-file', '-e', source + ':' + packagePath + '/action.yml'])
+  requireBuiltAction(packagePath)
   git(['fetch', '--force', '--tags', 'origin'])
   const tags = new Set(git(['tag', '--list']).trimEnd().split('\n').filter(Boolean))
   const sourceTrailer = 'Shipkit-source: ' + source
@@ -156,7 +181,7 @@ function promote(action, versionType, sourceRef) {
     if (license) root.set('LICENSE', license)
   }
   const actions = root.has('actions') ? readTree(previous + ':actions') : new Map()
-  actions.set(action, '040000 tree ' + sha(releaseSource + ':' + packagePath) + '\t' + action)
+  actions.set(action, '040000 tree ' + snapshotActionTree(packagePath) + '\t' + action)
   root.set('actions', '040000 tree ' + writeTree(actions) + '\tactions')
   const parent = previous ? ['-p', sha(previous + '^{commit}')] : []
   const snapshot = git([
