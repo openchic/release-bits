@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url'
 const release = fileURLToPath(new URL('./release.mjs', import.meta.url))
 
 function repository(t) {
-  const root = mkdtempSync(join(tmpdir(), 'shipkit-release-'))
-  const remoteRoot = mkdtempSync(join(tmpdir(), 'shipkit-origin-'))
-  const notesRoot = mkdtempSync(join(tmpdir(), 'shipkit-notes-'))
+  const root = mkdtempSync(join(tmpdir(), 'release-bits-release-'))
+  const remoteRoot = mkdtempSync(join(tmpdir(), 'release-bits-origin-'))
+  const notesRoot = mkdtempSync(join(tmpdir(), 'release-bits-notes-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   t.after(() => rmSync(remoteRoot, { recursive: true, force: true }))
   t.after(() => rmSync(notesRoot, { recursive: true, force: true }))
@@ -23,8 +23,8 @@ function repository(t) {
     GIT_COMMITTER_NAME: 'Test',
     GIT_COMMITTER_EMAIL: 'test@example.test',
     GITHUB_SERVER_URL: 'https://github.test',
-    GITHUB_REPOSITORY: 'fixture/shipkit',
-    SHIPKIT_RELEASE_NOTES_FILE: notes,
+    GITHUB_REPOSITORY: 'fixture/release-bits',
+    RELEASE_BITS_RELEASE_NOTES_FILE: notes,
   }
   function run(cmd, ...args) {
     return execFileSync(cmd, args, {
@@ -51,7 +51,7 @@ function repository(t) {
     mkdirSync(join(directory, 'dist'), { recursive: true })
     writeFileSync(join(directory, 'action.yml'), 'name: ' + name + '\n')
     writeFileSync(join(directory, 'package.json'), JSON.stringify({
-      name: '@shipkit/' + name,
+      name: '@release-bits/' + name,
       version: '0.0.0',
       private: true,
     }, null, 2) + '\n')
@@ -71,13 +71,19 @@ test('promotion commits pnpm version, creates feat and fix notes, and preserves 
   assert.match(first.notes, /## Features\n\n- add release notes/)
   git('fetch', '--tags', 'origin', 'main')
   assert.equal(git('show', 'changelog-v1.0.0:actions/changelog/dist/index.mjs'), 'changelog bundle')
-  assert.match(git('log', '-1', '--format=%B', 'HEAD'), /Shipkit-version: 1.0.0/)
+  const versionBody = git('log', '-1', '--format=%B', 'HEAD')
+  assert.match(versionBody, /release-bits-action: changelog/)
+  assert.match(versionBody, /release-bits-version: 1.0.0/)
+  const snapshotBody = git('log', '-1', '--format=%B', first.tag)
+  assert.ok(snapshotBody.includes('release-bits-source: ' + initialSource))
+  assert.ok(snapshotBody.includes('release-bits-version-commit: ' + first.source))
   assert.equal(JSON.parse(readFileSync(join(root, 'actions/changelog/package.json'), 'utf8')).version, '1.0.0')
   assert.equal(git('rev-parse', 'refs/remotes/origin/main'), first.source)
 
   git('checkout', '--detach', initialSource)
   assert.equal(git('rev-parse', 'HEAD'), initialSource)
   assert.equal(run(process.execPath, release, 'changelog', 'patch', initialSource), first.tag)
+
   git('checkout', '--detach', 'refs/remotes/origin/main')
 
   const ios = promote('build-ios', 'major')

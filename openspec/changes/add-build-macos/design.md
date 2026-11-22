@@ -9,6 +9,8 @@ Use the changelog Action’s Node.js 24, TypeScript, Rollup and bundled entry po
 
 The reusable verification workflow accepts an optional Action name. Push and pull request runs omit it and verify the full workspace. The release workflow passes the selected Action so verification runs that package's checks, build and tests; `changelog` also runs its packaged smoke check unless the caller explicitly skips it, while `build-macos` runs macOS runner verification. The publication workflow installs the lockfile dependencies and rebuilds the selected Action from the source commit. The release script adds only that build's ignored `dist` directory to the independent snapshot tree, leaving generated bundles out of the source branch. The release snapshot carries the selected Action output.
 
+New release commits and snapshots use `release-bits-*` metadata. Read the source of a previous snapshot or resumed release from its source trailer.
+
 ### Scheme discovery
 
 Probe each scheme independently when the caller omits `scheme`. Record failed probes and continue searching. Select a sole usable macOS scheme and log any probe failures. If no scheme qualifies, include the recorded errors in the failure. If multiple schemes qualify, list the candidates. An explicit scheme bypasses discovery.

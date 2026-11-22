@@ -83,6 +83,12 @@ The release workflow SHALL build the selected Action from the source commit and 
 - **WHEN** building the selected Action fails
 - **THEN** do not create its version commit or update release tags.
 
+#### Scenario: Release metadata uses the repository name
+- **WHEN** the release workflow creates a version commit and snapshot
+- **THEN** write metadata using the `release-bits-` prefix.
+- **WHEN** the workflow reads a previously published snapshot
+- **THEN** read its source trailer when resuming a release or generating release notes.
+
 ### Requirement: Verify the selected Action before publication
 The reusable release verification workflow SHALL run checks for the selected Action before publication. Push and pull request runs SHALL continue to verify the full workspace.
 

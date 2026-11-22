@@ -6,6 +6,8 @@ Add project discovery, scheme discovery that tolerates individual probe failures
 
 Require an explicit app version or a `major`, `minor` or `patch` increment from the Xcode project or an explicit base version. Accept the final version from `changelog` directly so callers can produce matching release notes and packages. Expose the successfully packaged version to callers for project updates and release metadata.
 
+Use the `release-bits-` prefix in the metadata displayed for new release snapshots.
+
 ## Capabilities
 ### New Capabilities
 - `build-macos`: Build and package a macOS app for direct distribution.

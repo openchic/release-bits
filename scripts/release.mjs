@@ -59,6 +59,10 @@ function trailer(body, name) {
   return body.split('\n').find((line) => line.startsWith(name + ': '))?.slice(name.length + 2)
 }
 
+function snapshotSource(body) {
+  return /^[a-z][a-z0-9-]*-source: (.+)$/im.exec(body)?.[1]
+}
+
 function releaseNotes(previousSource, source, packagePath, tag) {
   const range = previousSource ? previousSource + '..' + source : source
   const records = git(['log', '--format=%H%x1f%s', range, '--', packagePath])
@@ -88,8 +92,8 @@ function releaseNotes(previousSource, source, packagePath, tag) {
     '/commit/' + source
   const notes = body + '\n\n---\n\nPublished from [' + source.slice(0, 7) + '](' +
     sourceUrl + ') as `' + tag + '`.\n'
-  const output = process.env.SHIPKIT_RELEASE_NOTES_FILE
-  if (!output) throw new Error('SHIPKIT_RELEASE_NOTES_FILE is required')
+  const output = process.env.RELEASE_BITS_RELEASE_NOTES_FILE
+  if (!output) throw new Error('RELEASE_BITS_RELEASE_NOTES_FILE is required')
   mkdirSync(dirname(output), { recursive: true })
   writeFileSync(output, notes)
 }
@@ -108,14 +112,13 @@ function promote(action, versionType, sourceRef) {
   requireBuiltAction(packagePath)
   git(['fetch', '--force', '--tags', 'origin'])
   const tags = new Set(git(['tag', '--list']).trimEnd().split('\n').filter(Boolean))
-  const sourceTrailer = 'Shipkit-source: ' + source
   const actionTags = git(['tag', '--list', '--sort=-version:refname', action + '-v*'])
     .trimEnd().split('\n').filter(Boolean)
 
   let resumedTag = ''
   for (const name of actionTags) {
     const body = git(['log', '-1', '--format=%B', name])
-    if (body.split('\n').includes(sourceTrailer)) {
+    if (snapshotSource(body) === source) {
       resumedTag = name
       break
     }
@@ -126,10 +129,10 @@ function promote(action, versionType, sourceRef) {
     ? actionTags[resumedIndex + 1] || ''
     : actionTags[0] || ''
   const previousSource = previousTag
-    ? trailer(git(['log', '-1', '--format=%B', previousTag]), 'Shipkit-source')
+    ? snapshotSource(git(['log', '-1', '--format=%B', previousTag]))
     : ''
   const resumedSource = resumedTag
-    ? trailer(git(['log', '-1', '--format=%B', resumedTag]), 'Shipkit-source')
+    ? snapshotSource(git(['log', '-1', '--format=%B', resumedTag]))
     : ''
   let version = JSON.parse(readFileSync(packagePath + '/package.json', 'utf8')).version
   let releaseSource = source
@@ -158,9 +161,9 @@ function promote(action, versionType, sourceRef) {
       '-c', 'user.email=github-actions[bot]@users.noreply.github.com',
       '-c', 'commit.gpgsign=false', 'commit', '--only',
       '-m', 'chore(' + action + '): release v' + version,
-      '-m', 'Shipkit-action: ' + action,
-      '-m', 'Shipkit-version: ' + version,
-      '-m', 'Shipkit-source: ' + source,
+      '-m', 'release-bits-action: ' + action,
+      '-m', 'release-bits-version: ' + version,
+      '-m', 'release-bits-source: ' + source,
       '--', packagePath + '/package.json',
     ])
     releaseSource = sha('HEAD')
@@ -188,8 +191,8 @@ function promote(action, versionType, sourceRef) {
     '-c', 'user.name=github-actions[bot]',
     '-c', 'user.email=github-actions[bot]@users.noreply.github.com',
     '-c', 'commit.gpgsign=false', 'commit-tree', writeTree(root), ...parent,
-    '-m', tag, '-m', 'Shipkit-source: ' + source,
-    '-m', 'Shipkit-version-commit: ' + releaseSource,
+    '-m', tag, '-m', 'release-bits-source: ' + source,
+    '-m', 'release-bits-version-commit: ' + releaseSource,
   ]).trim()
   git(['push', '--atomic', '--force-with-lease=' + ref + ':' + previous, 'origin',
     releaseSource + ':refs/heads/main', snapshot + ':refs/tags/' + tag,

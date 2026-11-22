@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: shipkit-snapshot-publication
+      group: release-bits-snapshot-publication
       queue: max
     steps:
       - uses: actions/checkout@v6
@@ -55,11 +55,11 @@ jobs:
           ACTION: ${{ inputs.action }}
           VERSION_TYPE: ${{ inputs.version-type }}
           GITHUB_TOKEN: ${{ github.token }}
-          SHIPKIT_RELEASE_NOTES_FILE: ${{ runner.temp }}/shipkit-release-notes.md
+          RELEASE_BITS_RELEASE_NOTES_FILE: ${{ runner.temp }}/release-bits-release-notes.md
         run: |
           set -euo pipefail
           tag="$(node scripts/release.mjs "$ACTION" "$VERSION_TYPE" "$GITHUB_SHA")"
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --verify-tag --title "$tag" \
-              --notes-file "$SHIPKIT_RELEASE_NOTES_FILE"
+              --notes-file "$RELEASE_BITS_RELEASE_NOTES_FILE"
           fi

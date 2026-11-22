@@ -19,6 +19,9 @@
 ## 4. Scheme discovery
 - [x] 4.1 Continue scheme discovery after individual probe failures and verify automatic and explicit selection.
 
+## 5. Release snapshot metadata
+- [x] 5.1 Use the `release-bits-` prefix for release metadata and verify retries and release notes.
+
 ## Verification record
 
 Node.js 24 workspace checks, builds and all 23 tests passed on macOS before the release-time build change. Xcode built the fixture for all three selections. A disposable P12 signed and verified all three DMGs, including a versioned framework, XPC service, extension, helper app and standalone library. Verified architecture errors, retained prebuilt permissions and independent provisioning-profile validation. Production Developer ID, Apple notarization, ticket stapling and Gatekeeper acceptance require a release run with team credentials.
@@ -28,3 +31,5 @@ Both Actions passed type checks and bundled successfully with Node.js 24. All 17
 After adding the version output, the macOS Action type check, bundle build and all seven entry tests passed. The success case used a simulated packaging result and the real GitHub output writer. The existing failure cases continued to leave the output file empty.
 
 After updating scheme discovery, the macOS Action type check and both scheme discovery tests passed. The tests simulated a failed probe, an iOS scheme, a usable macOS scheme and an explicitly selected scheme.
+
+The release script test passed with the `release-bits-` metadata. It verified release retries and incremental release notes.

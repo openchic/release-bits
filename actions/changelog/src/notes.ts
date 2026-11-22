@@ -98,7 +98,7 @@ export function markdown(notes: Notes) {
 }
 
 export function preview(version: string, source: string, notes: Notes, output?: string) {
-  const dir = output ? resolve(output) : mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'shipkit-notes-'))
+  const dir = output ? resolve(output) : mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'release-bits-notes-'))
   mkdirSync(dir, { recursive: true })
   const prefix = join(dir, 'release-notes-' + version)
   writeFileSync(prefix + '.json', JSON.stringify({ version, source_sha: source, notes }, null, 2) + '\n')

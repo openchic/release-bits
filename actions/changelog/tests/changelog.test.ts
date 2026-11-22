@@ -33,7 +33,7 @@ function commit(path: string, text: string, subject: string) {
   git('commit', '-m', subject)
 }
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'shipkit-test-'))
+  root = mkdtempSync(join(tmpdir(), 'release-bits-test-'))
   process.chdir(root)
   git('init', '--bare', 'origin')
   git('init', '-b', 'main', 'work')

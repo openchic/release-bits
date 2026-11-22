@@ -1,6 +1,6 @@
 ## Why
 
-Shipkit delivers Apple release tools from one repository. Consumers choose a compatible major per step while maintainers promote individual actions.
+ReleaseBits delivers Apple release tools from one repository. Consumers choose a compatible major per step while maintainers promote individual actions.
 
 ## What Changes
 
