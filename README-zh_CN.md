@@ -6,28 +6,24 @@
 
 ## 功能
 
-- 从 `feat` 和 `fix` 提交**生成中英双语发布说明**。
-- 将说明写入 `changelogs.json`，**创建草稿 PR 供审核**。
-- 重复运行时**复用已有 PR 或草稿**，保留人工修改。
-- 构建、签名并公证 Universal、Intel 或 Apple Silicon 的 DMG。[build-macos Action](docs/build-macos.md)
+| Action | 用途 |
+| --- | --- |
+| `changelog` | 从 `feat` 和 `fix` 提交生成中英双语发布说明，写入 `changelogs.json` 并创建草稿 PR。重复运行时复用已有 PR 或草稿，保留人工修改。 |
+| `build-macos` | 从 Xcode 工程构建 App，生成签名和公证后的 DMG。可选择 Universal、Intel、Apple Silicon 中的一种或多种。打包版本可直接指定，也可读取工程版本后递增得出。 |
 
-## 接入 · changelog
+## 生成发布说明
 
 1. 在 App 仓库允许 GitHub Actions 创建 PR，并配置 `LLM_API_KEY` 仓库密钥。
-2. 将示例复制到 App 仓库的 `.github/workflows/`，按需调整目标分支，并确认 `uses` 引用的 Action tag 已发布。[release-notes workflow 示例](examples/release-notes.yml)
-3. 在 GitHub Actions 中手动运行 **Prepare release notes**，填写基础版本，按需选择递增类型。
+2. 使用[发布说明工作流示例](examples/release-notes.yml)，按需调整目标分支。
+3. 手动运行 **Prepare release notes**，填写基础版本，按需选择递增类型。
 
-输入与输出、草稿处理、分支清理和合并后的 App 发布流程见 [changelog Action 文档](docs/changelog.md)。
+## 打包 macOS App
 
-## Agent 接入提示词
+1. 配置 [Apple 签名与公证凭据](docs/macos-signing.md)。
+2. 使用 [macOS 构建工作流示例](examples/build-macos.yml)，按项目调整 Xcode 配置。
+3. 手动运行 **Build macOS**，从工作流产物中下载 DMG。
 
-```text
-请将 ReleaseBits（openchic/release-bits）的 changelog Action 接入当前 App 仓库。
-参考该仓库的 docs/changelog.md 和 examples/release-notes.yml，确认已发布的 Action tag。
-结合现有 workflow 和版本来源，按示例配置手动触发、权限、密钥引用和 PR 关闭清理。
-沿用 App 现有的构建与发布流程。
-验证修改后的 YAML，并说明如何配置 LLM_API_KEY 和运行工作流。
-```
+组合使用时，把 `changelog` 算出的最终版本传给 `build-macos` 的 `version`，省略 `version-type`。
 
 ## 开发与维护
 
