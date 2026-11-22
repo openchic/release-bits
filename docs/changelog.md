@@ -148,7 +148,7 @@ App 的 tag、GitHub Release、appcast 和打包由 App 仓库自己的 workflow
 
 ## 发布 changelog Action（维护者）
 
-1. 在 `main` 上运行 **Release** workflow，选择 `changelog` 和版本类型，默认 `minor`。
+1. 在 `main` 上运行 **Publish action** 工作流，选择 `changelog` 和版本类型，默认 `minor`。
 2. Workflow 安装锁定的依赖，在发布任务中重新构建所选 Action，并把生成的 `dist` 放入发布快照。源码仓库不跟踪构建目录。
 3. Workflow 使用 `pnpm version` 更新 `actions/changelog/package.json`，初始版本为 `0.0.0`。版本提交、固定 tag（如 `changelog-v1.1.0`）和主版本 tag（如 `v1`）一起原子推送。
 4. Workflow 收集该 Action 自上次发布以来的 `feat` 和 `fix` 提交，生成变更日志并创建 GitHub Release。

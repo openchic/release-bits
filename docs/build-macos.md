@@ -95,4 +95,4 @@ Universal 包沿用 `{app-name}-{version}.dmg`，Intel 和 Apple Silicon 包分�
 
 ## 发布 build-macos Action（维护者）
 
-在 Release workflow 选择 `build-macos` 和版本增量。Workflow 会在发布任务中重新构建 Action，并将生成的 `dist` 放入版本快照。首次发布选择 `major` 可从 0.0.0 生成 `build-macos-v1.0.0` 并更新共享 `v1`。
+在 **Publish action** 工作流中选择 `build-macos` 和版本增量。工作流会在发布任务中重新构建 Action，并将生成的 `dist` 放入版本快照。首次发布选择 `major` 可从 0.0.0 生成 `build-macos-v1.0.0` 并更新共享 `v1`。
