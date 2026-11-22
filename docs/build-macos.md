@@ -28,6 +28,7 @@
 | `intel` | 否 | — | 生成仅含 `x86_64` 的 Intel 包 |
 | `apple-silicon` | 否 | — | 生成仅含 `arm64` 的 Apple Silicon 包 |
 | `entitlements-path` | 否 | 主 App target 的 `CODE_SIGN_ENTITLEMENTS` | 仓库相对路径，只覆盖主 App 的签名权限。内嵌组件各自读取权限 |
+| `explicit-profile-app-id` | 否 | `false` | 设为 `true` 时要求主 App profile 的 `com.apple.application-identifier` 精确匹配构建产物的 App ID。启用后必须提供 profile，通配 App ID 不通过 |
 
 三个架构输入全部省略时，Action 生成 Universal 包。只要传入任一开关，就只生成显式设为 `true` 的包。三项都选时会生成三个 DMG，包括一个 Universal 包和两个单架构包，`packages-json` 也会返回三项。例如，只打 Intel 包时，`with` 中只需加上 `intel: true`。传入的开关全部为 `false`（包括手动取消全部勾选）时，Action 在构建前提示至少选择一种架构并停止。
 
@@ -79,7 +80,7 @@
 1. 按上述规则确定要生成的包，架构开关的非空值只接受 `true` 或 `false`。检查工程、scheme 和凭据，自动选择唯一工程入口和 App scheme。探测某个 scheme 失败时会记录原因并继续。找到多个可用方案时列出候选名称，找不到时报告探测错误。
 2. 用 `xcodebuild` 为每种选定架构分别构建未签名的 App，并核对主可执行文件的架构。全部构建完成后才将 P12 导入临时钥匙串。工程构建脚本的环境中不含 Action 的 Apple 凭据。
 3. 在打包副本中检查每个内嵌组件，包括 framework、动态库、helper App、XPC 服务和扩展。组件含有多余架构时自动裁剪。例如，将 Universal framework 打入 Intel 包时只保留 `x86_64`。缺少目标架构时，报告组件路径和缺少的架构并停止。
-4. 主 App 可使用环境变量传入的 profile。需要 profile 的扩展或 helper 须在构建产物中自带匹配的 `Contents/embedded.provisionprofile`。Action 按组件校验有效期、团队、证书、App ID 和权限范围。
+4. 主 App 可使用环境变量传入的 profile。需要 profile 的扩展或 helper 须在构建产物中自带匹配的 `Contents/embedded.provisionprofile`。Action 按组件校验有效期、团队、证书、App ID 和权限范围。启用 `explicit-profile-app-id` 时，主 App 的 profile 必须提供 `com.apple.application-identifier`，且其值须精确等于 `ApplicationIdentifierPrefix` 与构建产物 `CFBundleIdentifier` 拼成的完整 App ID。此要求只约束主 App 的应用标识，Keychain access group 仍接受 profile 的通配授权。
 5. 从内到外签名，最后签主 App。每个组件使用自己 Xcode target 的 `CODE_SIGN_ENTITLEMENTS`。预编译组件沿用所选架构已有的签名权限，无权限时按空权限签名。Universal 组件两个架构的既有权限冲突时停止。签名启用 Hardened Runtime 和安全时间戳，并逐项验证，最后递归验证整个 App。
 6. 将签名后的 App 和指向 `/Applications` 的符号链接打入压缩 DMG，签名后用 `notarytool` 提交公证。取得提交 ID 后按该 ID 查询结果。Apple 拒绝时报告提交 ID，便于查询公证日志。
 7. 收到 `Accepted` 后，将票据装订到 DMG，通过 `stapler validate` 和 Gatekeeper 评估，再对**最终 DMG** 计算 SHA-256 和字节数。

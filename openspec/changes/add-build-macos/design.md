@@ -30,5 +30,7 @@ Perform all thinning and signing on a staging copy. Require every executable to 
 
 The optional Base64 provisioning profile belongs to the main app. A component that needs authorization must embed its own matching Developer ID profile during the project build. Validate each profile against the signing identity, bundle identifier and requested entitlements.
 
+The `explicit-profile-app-id` input defaults to `false`. When enabled, require a profile for the main app and compare its `Entitlements['com.apple.application-identifier']` exactly with `ApplicationIdentifierPrefix[0] + '.' + CFBundleIdentifier` from the built app. Reuse the decoded profile in the existing permission validation and fail before signing the main app or creating its image. Keep wildcard matching for `keychain-access-groups` and leave embedded components on their existing per-profile validation path.
+
 ## Risks / Trade-offs
 Xcode project scripts must be trusted. Production notarization requires Apple credentials and external service availability.

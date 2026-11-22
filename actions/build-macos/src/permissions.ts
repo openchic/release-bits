@@ -26,9 +26,28 @@ function expand(value: unknown, vars: Record<string, string>): unknown {
   })
 }
 
-export function signingPermissions(app: Pick<Product, 'bundleId' | 'permissions' | 'settings'>, identity: Identity, profile?: Profile) {
+export function signingPermissions(app: Pick<Product, 'bundleId' | 'permissions' | 'settings'>, identity: Identity,
+  profile?: Profile, explicitProfileAppId = false) {
   const appKey = 'com.apple.application-identifier'
   const teamKey = 'com.apple.developer.team-identifier'
+  if (explicitProfileAppId) {
+    if (!profile) throw new Error('Main app ' + app.bundleId + ': provisioning profile is required')
+    const profileIdentifier = profile.Entitlements?.[appKey]
+    if (typeof profileIdentifier !== 'string' || !profileIdentifier) {
+      throw new Error('Main app ' + app.bundleId + ': profile is missing ' + appKey)
+    }
+    if (profileIdentifier.includes('*')) {
+      throw new Error('Main app ' + app.bundleId + ': profile application identifier is wildcarded')
+    }
+    const prefixes = profile.ApplicationIdentifierPrefix
+    if (!Array.isArray(prefixes) || prefixes.length !== 1 || typeof prefixes[0] !== 'string' || !prefixes[0]) {
+      throw new Error('Main app ' + app.bundleId + ': profile must contain one application identifier prefix')
+    }
+    if (profileIdentifier !== prefixes[0] + '.' + app.bundleId) {
+      throw new Error('Main app ' + app.bundleId
+        + ': profile application identifier does not match the Bundle ID')
+    }
+  }
   let prefix = identity.team
   if (profile) {
     if (!(Date.parse(profile.ExpirationDate) > Date.now()) || !profile.Platform?.includes('OSX')

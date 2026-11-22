@@ -55,6 +55,21 @@ The Action SHALL keep secret material out of subprocess arguments, build script 
 - **WHEN** Apple rejects an image
 - **THEN** report its submission ID, fail and clean temporary signing resources.
 
+### Requirement: Optionally require an explicit main app profile App ID
+The Action SHALL accept the boolean input `explicit-profile-app-id`, defaulting to `false`. When enabled, it SHALL require a provisioning profile for the main app and require the profile's `com.apple.application-identifier` to exactly equal its `ApplicationIdentifierPrefix` plus the built main app's `CFBundleIdentifier`. This requirement SHALL be checked before signing the main app or creating its disk image. It SHALL apply only to the main app's application identifier. Keychain access groups SHALL continue to use wildcard authorization, and embedded components SHALL continue to use their own profile validation.
+
+#### Scenario: Exact App ID with wildcard Keychain authorization
+- **WHEN** strict matching is enabled, the main app profile explicitly authorizes the built app's identifier, and the profile wildcard-authorizes the requested Keychain access group
+- **THEN** sign the app with its concrete Keychain access group.
+
+#### Scenario: Missing or non-explicit main app profile App ID
+- **WHEN** strict matching is enabled and the main app profile is missing, its application identifier is missing or wildcarded, or it does not match the built app's identifier
+- **THEN** fail with an error identifying the main app Bundle ID and reason before signing the main app or creating its disk image.
+
+#### Scenario: Existing wildcard profile compatibility
+- **WHEN** strict matching is disabled and the profile wildcard-authorizes the main app's application identifier
+- **THEN** preserve the existing wildcard authorization behavior.
+
 ### Requirement: Package embedded code
 The Action SHALL sign nested code before its enclosing bundle, use each component’s own entitlements, and verify the complete app before creating a DMG.
 

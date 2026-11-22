@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { build, projectVersion, resolveVersion, schemeArgs, type Mode, type Inputs } from './build.ts'
 import { profileData, withIdentity, type Credentials } from './credentials.ts'
 import { createSignedImage, describe, notarize } from './package.ts'
+import { run } from './utils.ts'
 
 function phase<T>(description: string, action: () => T): T {
   console.log(description)
@@ -11,7 +12,7 @@ function phase<T>(description: string, action: () => T): T {
 }
 
 export function prepare(root: string, temp: string, options: Inputs & { versionType: string }, modes: Mode[], credentials: Credentials,
-  remember: (path: string) => void) {
+  remember: (path: string) => void, explicitProfileAppId = false) {
   const work = mkdtempSync(join(temp, 'build-macos-'))
   const output = join(work, 'packages')
   const privateDir = join(work, 'private')
@@ -29,7 +30,8 @@ export function prepare(root: string, temp: string, options: Inputs & { versionT
     const profile = profileData(privateDir, credentials.profile)
     const images = withIdentity(privateDir, credentials, (identity) => apps.map((app) => ({
       mode: app.mode,
-      path: phase('Sign ' + app.mode, () => createSignedImage(app, privateDir, output, identity, profile)),
+      path: phase('Sign ' + app.mode, () => createSignedImage(app, privateDir, output, identity, profile,
+        run, explicitProfileAppId)),
     })))
     const keyFile = join(privateDir, 'notary.p8')
     writeFileSync(keyFile, credentials.key, { mode: 0o600, flag: 'wx' })

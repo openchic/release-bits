@@ -8,6 +8,8 @@ Require an explicit app version or a `major`, `minor` or `patch` increment from 
 
 Use the `release-bits-` prefix in the metadata displayed for new release snapshots.
 
+Add an optional `explicit-profile-app-id` input for callers that require the main app's Developer ID profile to authorize its exact App ID. Keep the default compatible with existing callers and retain wildcard authorization for Keychain access groups.
+
 ## Capabilities
 ### New Capabilities
 - `build-macos`: Build and package a macOS app for direct distribution.

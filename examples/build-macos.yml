@@ -54,6 +54,8 @@ jobs:
           scheme: MyApp
           version: ${{ inputs.version }}
           version-type: ${{ inputs.version-type != 'none' && inputs.version-type || '' }}
+          # Enable this when the main app profile must explicitly match its built Bundle ID.
+          # explicit-profile-app-id: true
           universal: ${{ inputs.universal }}
           intel: ${{ inputs.intel }}
           apple-silicon: ${{ inputs.apple-silicon }}

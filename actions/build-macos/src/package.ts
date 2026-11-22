@@ -25,12 +25,12 @@ export function describe(mode: Product['mode'], path: string) {
 }
 
 export function createSignedImage(product: Product, work: string, output: string, identity: Identity,
-  mainProfile: DistributionProfile | undefined, tool: Run = run) {
+  mainProfile: DistributionProfile | undefined, tool: Run = run, explicitProfileAppId = false) {
   const staging = join(work, 'stage-' + product.mode)
   mkdirSync(staging)
   const app = join(staging, basename(product.path))
   tool('/usr/bin/ditto', [product.path, app])
-  signApp(app, product, work, identity, mainProfile, tool)
+  signApp(app, product, work, identity, mainProfile, tool, explicitProfileAppId)
   symlinkSync('/Applications', join(staging, 'Applications'))
   const suffix = product.mode === 'universal' ? '' : '-' + product.mode
   const dmg = join(output, product.name + '-' + product.version + suffix + '.dmg')
