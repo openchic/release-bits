@@ -7,13 +7,16 @@ function main() {
   if (process.platform !== 'darwin') throw new Error('build-macos requires a macOS runner')
   const get = core.getInput
   const modes = architectures(get)
+  const explicitProfileAppId = get('explicit-profile-app-id')
+    ? core.getBooleanInput('explicit-profile-app-id') : false
   const credentials = takeCredentials()
   const root = process.env.GITHUB_WORKSPACE
   const temp = process.env.RUNNER_TEMP
   if (!root || !temp) throw new Error('Missing GITHUB_WORKSPACE or RUNNER_TEMP')
   const { version, packages } = prepare(root, temp, { project: get('project-path'), scheme: get('scheme'),
     name: get('app-name'), version: get('version'), versionType: get('version-type'), configuration: get('build-mode') || 'Release',
-    entitlements: get('entitlements-path') }, modes, credentials, (work) => core.saveState('work', work))
+    entitlements: get('entitlements-path') }, modes, credentials, (work) => core.saveState('work', work),
+    explicitProfileAppId)
   core.setOutput('packages-json', packages)
   core.setOutput('version', version)
 }

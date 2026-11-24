@@ -37,7 +37,7 @@ function existingPermissions(unit: Component, architectures: string[], tool: Run
 
 /** Sign each physical framework version, executable and bundle before its enclosing bundle. */
 export function signApp(app: string, product: Product, work: string, identity: Identity,
-  mainProfile?: DistributionProfile, tool = run) {
+  mainProfile?: DistributionProfile, tool = run, explicitProfileAppId = false) {
   const units = components(app)
   for (const unit of units) {
     const main = unit === units.at(-1)
@@ -53,7 +53,8 @@ export function signApp(app: string, product: Product, work: string, identity: I
         throw new Error('Profile destination must be a regular file')
       }
       const profile = supplied || (location && existsSync(location) ? readProfile(location, tool) : undefined)
-      const rights = signingPermissions({ bundleId, permissions, settings: target?.settings ?? {} }, identity, profile?.profile)
+      const rights = signingPermissions({ bundleId, permissions, settings: target?.settings ?? {} }, identity,
+        profile?.profile, main && explicitProfileAppId)
       if (location && supplied) copyFileSync(supplied.path, location)
       const args = ['--force', '--options', 'runtime', '--keychain', identity.keychain, '--sign',
         identity.fingerprint, '--timestamp', ...version]

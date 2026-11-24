@@ -32,6 +32,10 @@ inputs:
   entitlements-path:
     description: Main app signing entitlements relative to the repository
     required: false
+  explicit-profile-app-id:
+    description: Require an exact profile App ID match for the built main app when true
+    required: false
+    default: 'false'
 outputs:
   version:
     description: Final app version shared by all verified disk images

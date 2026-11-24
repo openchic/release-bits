@@ -1,4 +1,4 @@
-import { w as within, p as plist, r as readBlocks, a as run, b as readProfile, c as profileData, d as withIdentity, s as setFailed, t as takeCredentials, e as setOutput, g as getInput, f as saveState } from './credentials.mjs';
+import { w as within, p as plist, r as readBlocks, a as run, b as readProfile, c as profileData, d as withIdentity, s as setFailed, g as getBooleanInput, t as takeCredentials, e as setOutput, f as getInput, h as saveState } from './credentials.mjs';
 import { realpathSync, existsSync, readdirSync, readFileSync, statSync, lstatSync, copyFileSync, writeFileSync, chmodSync, renameSync, mkdirSync, symlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { relative, join, basename, resolve, dirname, extname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -413,9 +413,28 @@ function expand(value, vars) {
         return replacement;
     });
 }
-function signingPermissions(app, identity, profile) {
+function signingPermissions(app, identity, profile, explicitProfileAppId = false) {
     const appKey = 'com.apple.application-identifier';
     const teamKey = 'com.apple.developer.team-identifier';
+    if (explicitProfileAppId) {
+        if (!profile)
+            throw new Error('Main app ' + app.bundleId + ': provisioning profile is required');
+        const profileIdentifier = profile.Entitlements?.[appKey];
+        if (typeof profileIdentifier !== 'string' || !profileIdentifier) {
+            throw new Error('Main app ' + app.bundleId + ': profile is missing ' + appKey);
+        }
+        if (profileIdentifier.includes('*')) {
+            throw new Error('Main app ' + app.bundleId + ': profile application identifier is wildcarded');
+        }
+        const prefixes = profile.ApplicationIdentifierPrefix;
+        if (!Array.isArray(prefixes) || prefixes.length !== 1 || typeof prefixes[0] !== 'string' || !prefixes[0]) {
+            throw new Error('Main app ' + app.bundleId + ': profile must contain one application identifier prefix');
+        }
+        if (profileIdentifier !== prefixes[0] + '.' + app.bundleId) {
+            throw new Error('Main app ' + app.bundleId
+                + ': profile application identifier does not match the Bundle ID');
+        }
+    }
     let prefix = identity.team;
     if (profile) {
         if (!(Date.parse(profile.ExpirationDate) > Date.now()) || !profile.Platform?.includes('OSX')
@@ -487,7 +506,7 @@ function existingPermissions(unit, architectures, tool) {
     return permissions[0];
 }
 /** Sign each physical framework version, executable and bundle before its enclosing bundle. */
-function signApp(app, product, work, identity, mainProfile, tool = run) {
+function signApp(app, product, work, identity, mainProfile, tool = run, explicitProfileAppId = false) {
     const units = components(app);
     for (const unit of units) {
         const main = unit === units.at(-1);
@@ -504,7 +523,7 @@ function signApp(app, product, work, identity, mainProfile, tool = run) {
                 throw new Error('Profile destination must be a regular file');
             }
             const profile = supplied || (location && existsSync(location) ? readProfile(location, tool) : undefined);
-            const rights = signingPermissions({ bundleId, permissions, settings: target?.settings ?? {} }, identity, profile?.profile);
+            const rights = signingPermissions({ bundleId, permissions, settings: target?.settings ?? {} }, identity, profile?.profile, main && explicitProfileAppId);
             if (location && supplied)
                 copyFileSync(supplied.path, location);
             const args = ['--force', '--options', 'runtime', '--keychain', identity.keychain, '--sign',
@@ -548,12 +567,12 @@ function describe(mode, path) {
     readBlocks(path, 1024 * 1024, (bytes) => { hash.update(bytes); return true; });
     return { architecture: mode, path, filename: basename(path), sha256: hash.digest('hex'), size: statSync(path).size };
 }
-function createSignedImage(product, work, output, identity, mainProfile, tool = run) {
+function createSignedImage(product, work, output, identity, mainProfile, tool = run, explicitProfileAppId = false) {
     const staging = join(work, 'stage-' + product.mode);
     mkdirSync(staging);
     const app = join(staging, basename(product.path));
     tool('/usr/bin/ditto', [product.path, app]);
-    signApp(app, product, work, identity, mainProfile, tool);
+    signApp(app, product, work, identity, mainProfile, tool, explicitProfileAppId);
     symlinkSync('/Applications', join(staging, 'Applications'));
     const suffix = product.mode === 'universal' ? '' : '-' + product.mode;
     const dmg = join(output, product.name + '-' + product.version + suffix + '.dmg');
@@ -571,7 +590,7 @@ function phase(description, action) {
         throw new Error(description + ': ' + (error instanceof Error ? error.message : String(error)));
     }
 }
-function prepare(root, temp, options, modes, credentials, remember) {
+function prepare(root, temp, options, modes, credentials, remember, explicitProfileAppId = false) {
     const work = mkdtempSync(join(temp, 'build-macos-'));
     const output = join(work, 'packages');
     const privateDir = join(work, 'private');
@@ -587,7 +606,7 @@ function prepare(root, temp, options, modes, credentials, remember) {
         const profile = profileData(privateDir, credentials.profile);
         const images = withIdentity(privateDir, credentials, (identity) => apps.map((app) => ({
             mode: app.mode,
-            path: phase('Sign ' + app.mode, () => createSignedImage(app, privateDir, output, identity, profile)),
+            path: phase('Sign ' + app.mode, () => createSignedImage(app, privateDir, output, identity, profile, run, explicitProfileAppId)),
         })));
         const keyFile = join(privateDir, 'notary.p8');
         writeFileSync(keyFile, credentials.key, { mode: 0o600, flag: 'wx' });
@@ -609,6 +628,8 @@ function main() {
         throw new Error('build-macos requires a macOS runner');
     const get = getInput;
     const modes = architectures(get);
+    const explicitProfileAppId = get('explicit-profile-app-id')
+        ? getBooleanInput('explicit-profile-app-id') : false;
     const credentials = takeCredentials();
     const root = process.env.GITHUB_WORKSPACE;
     const temp = process.env.RUNNER_TEMP;
@@ -616,7 +637,7 @@ function main() {
         throw new Error('Missing GITHUB_WORKSPACE or RUNNER_TEMP');
     const { version, packages } = prepare(root, temp, { project: get('project-path'), scheme: get('scheme'),
         name: get('app-name'), version: get('version'), versionType: get('version-type'), configuration: get('build-mode') || 'Release',
-        entitlements: get('entitlements-path') }, modes, credentials, (work) => saveState('work', work));
+        entitlements: get('entitlements-path') }, modes, credentials, (work) => saveState('work', work), explicitProfileAppId);
     setOutput('packages-json', packages);
     setOutput('version', version);
 }

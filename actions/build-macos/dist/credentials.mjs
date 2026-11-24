@@ -28753,6 +28753,27 @@ function getInput(name, options) {
     return val.trim();
 }
 /**
+ * Gets the input value of the boolean type in the YAML 1.2 "core schema" specification.
+ * Support boolean input list: `true | True | TRUE | false | False | FALSE` .
+ * The return value is also in boolean type.
+ * ref: https://yaml.org/spec/1.2/spec.html#id2804923
+ *
+ * @param     name     name of the input to get
+ * @param     options  optional. See InputOptions.
+ * @returns   boolean
+ */
+function getBooleanInput(name, options) {
+    const trueValue = ['true', 'True', 'TRUE'];
+    const falseValue = ['false', 'False', 'FALSE'];
+    const val = getInput(name, options);
+    if (trueValue.includes(val))
+        return true;
+    if (falseValue.includes(val))
+        return false;
+    throw new TypeError(`Input does not meet YAML 1.2 "Core Schema" specification: ${name}\n` +
+        `Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
+}
+/**
  * Sets the value of an output.
  *
  * @param     name     name of the output to set
@@ -28934,4 +28955,4 @@ function withIdentity(work, credentials, use, tool = run) {
     }
 }
 
-export { run as a, readProfile as b, profileData as c, withIdentity as d, setOutput as e, saveState as f, getInput as g, getState as h, deleteKeychain as i, plist as p, readBlocks as r, setFailed as s, takeCredentials as t, within as w };
+export { run as a, readProfile as b, profileData as c, withIdentity as d, setOutput as e, getInput as f, getBooleanInput as g, saveState as h, getState as i, deleteKeychain as j, plist as p, readBlocks as r, setFailed as s, takeCredentials as t, within as w };

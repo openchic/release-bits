@@ -1,12 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import type { Product } from '../src/build.ts'
 import { profileData, withIdentity, type Credentials, type Profile } from '../src/credentials.ts'
-import { describe, notarize } from '../src/package.ts'
+import { createSignedImage, describe, notarize } from '../src/package.ts'
 import { signingPermissions } from '../src/permissions.ts'
 import { signApp } from '../src/sign.ts'
 import { run, type Run } from '../src/utils.ts'
@@ -27,6 +27,21 @@ const creds: Credentials = { key: 'private-key-fixture', password: 'password-fix
 test('resolves only requested rights using the profile prefix and signing team', () => {
   assert.deepEqual(signingPermissions(app, id, profile), { [group]: ['PREFIX.org.example.app'],
     [key]: 'PREFIX.org.example.app', 'com.apple.developer.team-identifier': team })
+  assert.deepEqual(signingPermissions(app, id, profile, true), { [group]: ['PREFIX.org.example.app'],
+    [key]: 'PREFIX.org.example.app', 'com.apple.developer.team-identifier': team })
+  const wildcardAppId = { ...profile, Entitlements: { ...profile.Entitlements, [key]: 'PREFIX.*' } }
+  assert.deepEqual(signingPermissions(app, id, wildcardAppId)[key], 'PREFIX.org.example.app')
+  assert.throws(() => signingPermissions(app, id, wildcardAppId, true),
+    /Main app org\.example\.app: profile application identifier is wildcarded/)
+  assert.throws(() => signingPermissions(app, id, undefined, true),
+    /Main app org\.example\.app: provisioning profile is required/)
+  const missingAppId = { ...profile, Entitlements: { ...profile.Entitlements } }
+  delete missingAppId.Entitlements[key]
+  assert.throws(() => signingPermissions(app, id, missingAppId, true),
+    /Main app org\.example\.app: profile is missing com\.apple\.application-identifier/)
+  const mismatchedAppId = { ...profile, Entitlements: { ...profile.Entitlements, [key]: 'PREFIX.org.other' } }
+  assert.throws(() => signingPermissions(app, id, mismatchedAppId, true),
+    /Main app org\.example\.app: profile application identifier does not match the Bundle ID/)
   assert.throws(() => signingPermissions(app, id), /authorize entitlement/)
   assert.throws(() => signingPermissions(app, id, { ...profile, ExpirationDate: '2001-01-01' }), /current/)
   assert.throws(() => signingPermissions(app, { ...id, fingerprint: '00' }, profile), /certificate/)
@@ -61,16 +76,50 @@ test('main and extension must each authorize their own identifier and permission
     const main = profileData(work, encoded, tool)
     const product = { ...app, componentTargets: new Map([[childId + '/Share.appex', app]]) }
     const childFile = join(child, 'Contents/embedded.provisionprofile')
-    assert.throws(() => signApp(root, product, work, id, main, tool), /Share.appex: Profile does not authorize/)
+    assert.throws(() => signApp(root, product, work, id, main, tool, true),
+      /Share.appex: Profile does not authorize/)
     assert.equal(existsSync(childFile), false)
     writeFileSync(childFile, xml(profile))
-    assert.throws(() => signApp(root, product, work, id, main, tool), /Share.appex: Profile does not authorize/)
-    const matching = xml({ ...profile, Entitlements: { ...profile.Entitlements, [key]: 'PREFIX.' + childId } })
-    writeFileSync(childFile, matching)
-    signApp(root, product, work, id, main, tool)
-    assert.deepEqual(readFileSync(childFile), matching)
+    assert.throws(() => signApp(root, product, work, id, main, tool, true),
+      /Share.appex: Profile does not authorize/)
+    const wildcard = xml({ ...profile, Entitlements: { ...profile.Entitlements, [key]: 'PREFIX.org.example.app.*' } })
+    writeFileSync(childFile, wildcard)
+    signApp(root, product, work, id, main, tool, true)
+    assert.deepEqual(readFileSync(childFile), wildcard)
     assert.equal(readFileSync(join(root, 'Contents/embedded.provisionprofile')).toString('base64'), encoded)
   })
+
+test('strict main app profile failure precedes main signing and DMG creation',
+  { skip: process.platform !== 'darwin' }, (t) => {
+  const work = mkdtempSync(join(tmpdir(), 'explicit-profile-'))
+  t.after(() => rmSync(work, { recursive: true, force: true }))
+  const source = join(work, 'Sample.app')
+  const contents = join(source, 'Contents')
+  const binary = join(contents, 'MacOS/Executable')
+  mkdirSync(join(contents, 'MacOS'), { recursive: true })
+  writeFileSync(binary, 'fixture')
+  const info = run('/usr/bin/plutil', ['-convert', 'xml1', '-o', '-', '--', '-'], {
+    input: JSON.stringify({ CFBundleIdentifier: app.bundleId, CFBundleExecutable: 'Executable' }),
+  })
+  writeFileSync(join(contents, 'Info.plist'), info)
+
+  const commands: Array<{ command: string, args: string[] }> = []
+  const tool: Run = (command, args, options) => {
+    commands.push({ command, args })
+    if (command.endsWith('/ditto')) {
+      cpSync(args[0], args[1], { recursive: true })
+      return Buffer.alloc(0)
+    }
+    if (command.endsWith('/lipo')) return Buffer.from('arm64 x86_64')
+    return Buffer.alloc(0)
+  }
+
+  assert.throws(() => createSignedImage({ ...app, path: source }, work, join(work, 'packages'), id,
+    undefined, tool, true), /Main app org\.example\.app: provisioning profile is required/)
+  assert.ok(commands.some(({ command }) => command.endsWith('/ditto')))
+  assert.ok(!commands.some(({ command, args }) => command.endsWith('/codesign') && args.includes('--sign')))
+  assert.ok(!commands.some(({ command }) => command.endsWith('/hdiutil')))
+})
 
 test('secrets never enter tool arguments and keychain is removed on error', (t) => {
   const work = mkdtempSync(join(tmpdir(), 'identity-'))
