@@ -1,6 +1,3 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
 import { commitsSince, head } from './git.ts'
 import { requestNotes } from './gemini.ts'
 import { buildPrompt } from './prompt.ts'
@@ -81,27 +78,18 @@ export function evidence(commits: ReturnType<typeof commitsSince>) {
   if (!items.length) throw new Error('No feat or fix changes since the selected release')
   const json = JSON.stringify({ commits: items })
   if (Buffer.byteLength(json) > 200_000) throw new Error('Commit evidence is too large; narrow base-ref')
-  return { json, count: items.length }
+  return { json }
 }
 
 export async function generate(version: string, base: string, max: number, model: string, call = requestNotes) {
   const source = head()
-  const { json, count } = evidence(commitsSince(base))
+  const { json } = evidence(commitsSince(base))
   const notes = validateNotes(await call(buildPrompt(version, json, max), model))
   if (head() !== source) throw new Error('Repository changed during generation')
-  return { source, count, notes }
+  return { source, notes }
 }
 
 export function markdown(notes: Notes) {
   return ['## 简体中文', '', ...notes['zh-CN'].map((s) => '- ' + s),
     '', '## English', '', ...notes.en.map((s) => '- ' + s)].join('\n')
-}
-
-export function preview(version: string, source: string, notes: Notes, output?: string) {
-  const dir = output ? resolve(output) : mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'release-bits-notes-'))
-  mkdirSync(dir, { recursive: true })
-  const prefix = join(dir, 'release-notes-' + version)
-  writeFileSync(prefix + '.json', JSON.stringify({ version, source_sha: source, notes }, null, 2) + '\n')
-  writeFileSync(prefix + '.md', markdown(notes) + '\n')
-  return { 'notes-json-path': prefix + '.json', 'notes-markdown-path': prefix + '.md' }
 }

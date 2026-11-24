@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, existsSync, realpathSync, statSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
-import { BUMPS, effectiveVersion } from '../../shared/version.mts'
+import { BUMPS, effectiveVersion } from '../../../shared/version.mts'
 import { components } from './components.ts'
 import { resolveComponentSettings, targetSettings, workspaceMembers } from './targets.ts'
 import { plist, run, within } from './utils.ts'

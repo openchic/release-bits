@@ -1,0 +1,6 @@
+name: changelog-cleanup
+description: Delete a changelog branch when its pull request is closed.
+
+runs:
+  using: node24
+  main: dist/index.mjs

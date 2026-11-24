@@ -27,7 +27,7 @@ async function run() {
   })
   for (const [name, value] of Object.entries(result.outputs)) core.setOutput(name, value)
   for (const message of result.warnings) core.warning(message)
-  await writeSummary(result.outputs)
+  await writeSummary(result.outputs, result.notes)
 }
 
 run().catch((error: unknown) => core.setFailed(error instanceof Error ? error.message : String(error)))

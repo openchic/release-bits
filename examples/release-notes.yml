@@ -35,25 +35,11 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 
   cleanup:
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'changelogs/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     steps:
-      - env:
+      - uses: openchic/release-bits/actions/changelog-cleanup@v1
+        env:
           GITHUB_TOKEN: ${{ github.token }}
-          BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          set -euo pipefail
-          ref="repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}"
-          if output="$(gh api "$ref" 2>&1)"; then
-            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"
-          elif [[ "$output" == *"HTTP 404"* ]]; then
-            echo "Release branch already deleted"
-          else
-            printf '%s\n' "$output" >&2
-            exit 1
-          fi

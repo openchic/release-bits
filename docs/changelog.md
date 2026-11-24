@@ -60,13 +60,8 @@ GitHub Actions 输入均为字符串。
 | `pr-created` | 本次是否新建 PR |
 | `version` | 结果版本 |
 | `branch` | `changelogs/v{version}` |
-| `source-sha` | 生成时的 HEAD 快照 |
-| `commit-count` | 作为生成依据的 feat/fix 提交数；复用草稿时为 0 |
-| `warning-count` | 最终草稿的风格警告数 |
-| `notes-json-path` | 预览 JSON 的绝对路径 |
-| `notes-markdown-path` | 预览 Markdown 的绝对路径 |
 
-预览文件写在 runner 临时目录，文件名为 `release-notes-{version}.json` 和 `release-notes-{version}.md`。直接返回已有 PR 时，`commit-count` 和 `warning-count` 均为 `0`，`source-sha` 和预览路径为空。
+直接返回已有 PR 时，`pr-created` 为 `false`，其余输出仍返回对应版本、分支和 PR 链接。
 
 ### 运行摘要
 
@@ -96,7 +91,7 @@ Action 使用 `changelogs/v{version}` 分支，并按下表的顺序处理。
 - 提交材料不包含 SHA 或 diff，上限为 200 KB。提交正文视为待分析资料，其中的指令会被忽略。
 - Gemini 请求在 90 秒后超时，失败不重试。中英文说明须成对且非空，并根据提交材料用通用措辞撰写。
 
-风格问题通过 GitHub 警告标注报告，并计入 `warning-count`，不影响草稿和 PR。检查项包括中文一句包含多个改动、以“优化”等空泛动词开头或超过 `max-chars + 10`，以及英文以祈使动词开头或包含 `now`。
+风格问题通过 GitHub warning annotation 报告，不影响草稿和 PR。检查项包括中文一句包含多个改动、以“优化”等空泛动词开头或超过 `max-chars + 10`，以及英文以祈使动词开头或包含 `now`。
 
 ### 草稿格式与写入
 
@@ -120,7 +115,7 @@ Action 原子写入 catalog 并只提交该文件。文件不存在时创建数�
 
 ### PR 关闭后的分支清理
 
-调用方可在 `pull_request` 的 `closed` 事件中用 `gh api` 清理分支。合并和未合并关闭都清理，但只处理同仓库的 `changelogs/` 分支。API 返回 404 时视为分支已删除，其他错误会让任务失败。`cleanup` job 见 [release-notes workflow 示例](../examples/release-notes.yml)。
+调用方在 `pull_request` 的 `closed` 事件中调用 `changelog-cleanup` Action。合并和未合并关闭都会检查分支是否可删除。Action 会保留已更新或仍有打开 PR 使用的分支。完整配置见 [release-notes workflow 示例](../examples/release-notes.yml)，Action 契约见 [changelog-cleanup 文档](changelog-cleanup.md)。
 
 ### 合并后的 App 发布
 

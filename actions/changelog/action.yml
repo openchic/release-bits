@@ -39,16 +39,6 @@ outputs:
     description: Effective version.
   branch:
     description: Release branch name.
-  source-sha:
-    description: Head commit used for generation.
-  commit-count:
-    description: Commits that contributed evidence.
-  warning-count:
-    description: Style warnings found in the final notes.
-  notes-json-path:
-    description: Absolute path to the preview JSON.
-  notes-markdown-path:
-    description: Absolute path to the preview Markdown.
 
 runs:
   using: node24

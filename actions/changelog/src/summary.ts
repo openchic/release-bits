@@ -1,11 +1,11 @@
-import { readFileSync } from 'node:fs'
 import * as core from '@actions/core'
+import { markdown, type Notes } from './notes.ts'
 import type { prepare } from './prepare.ts'
 
 type Outputs = Awaited<ReturnType<typeof prepare>>['outputs']
 
 /** Append the completed PR result without failing preparation if reporting fails. */
-export async function writeSummary(outputs: Outputs) {
+export async function writeSummary(outputs: Outputs, notes?: Notes) {
   try {
     const status = outputs['pr-created'] ? 'Created draft PR' : 'Reused PR'
     const lines = [
@@ -14,9 +14,7 @@ export async function writeSummary(outputs: Outputs) {
       '',
       '[Please review the PR. Merging it approves the release notes.](' + outputs['pr-url'] + ')',
     ]
-    if (outputs['notes-markdown-path']) {
-      lines.push('', readFileSync(outputs['notes-markdown-path'], 'utf8').trimEnd())
-    }
+    if (notes) lines.push('', markdown(notes))
     await core.summary.addRaw(lines.join('\n') + '\n').write()
   } catch (error) {
     core.summary.emptyBuffer()

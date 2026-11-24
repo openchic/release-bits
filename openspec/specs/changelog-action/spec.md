@@ -7,15 +7,19 @@ Provide a directly executable GitHub Action for bilingual Apple release notes wi
 ## Requirements
 
 ### Requirement: Changelog compatibility
-The Action SHALL preserve the documented seven inputs, nine outputs, draft reuse order, atomic catalog updates and drift checks.
+The Action SHALL preserve draft reuse order, atomic catalog updates and drift checks while exposing four outputs: `pr-url`, `pr-created`, `version` and `branch`. It SHALL include available bilingual notes in the job summary and report style warnings through GitHub annotations.
 
 #### Scenario: Existing pull request
 - **WHEN** the version has an open release PR
-- **THEN** return its URL with pr-created false, zero counts and empty preview paths and source SHA.
+- **THEN** return its URL with `pr-created` false and the effective version and branch, without generating preview files
 
 #### Scenario: New draft or existing branch
 - **WHEN** a release needs a draft PR
-- **THEN** reuse a valid branch draft before generating notes, preserve published history and report the final previews.
+- **THEN** reuse a valid branch draft before generating notes, preserve published history and report the final bilingual preview in the job summary
+
+#### Scenario: Style warnings
+- **WHEN** generated or reused notes have style warnings
+- **THEN** report each warning through a GitHub annotation without adding a warning-count output
 
 ### Requirement: Runtime credential names
 The Action SHALL read its GitHub API token from `GITHUB_TOKEN` and its language model API key from `LLM_API_KEY`.

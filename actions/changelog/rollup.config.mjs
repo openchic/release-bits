@@ -11,7 +11,7 @@ export default {
     distribution(import.meta.url),
     resolve(),
     commonjs({ ignoreTryCatch: false }),
-    typescript({ include: ['src/**/*.ts', '../shared/**/*.mts'] }),
+    typescript({ include: ['src/**/*.ts', '../../shared/**/*.mts'] }),
   ],
   output: { dir: 'dist', format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name].mjs' },
 }

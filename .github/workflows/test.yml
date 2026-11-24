@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'actions/**'
+      - 'shared/**'
       - 'scripts/**'
       - '.github/workflows/**'
       - 'package.json'
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - 'actions/**'
+      - 'shared/**'
       - 'scripts/**'
       - '.github/workflows/**'
       - 'package.json'
@@ -72,9 +74,28 @@ jobs:
         run: |
           jq -e '. == {
             "version":"1.2.3","branch":"changelogs/v1.2.3","pr-url":"https://example.test/pull/12",
-            "pr-created":"false","source-sha":"","commit-count":"0","warning-count":"0",
-            "notes-json-path":"","notes-markdown-path":""
+            "pr-created":"false"
           }' <<< "$OUTPUTS"
+
+  changelog-cleanup:
+    name: Changelog cleanup action
+    if: ${{ inputs.action == '' || inputs.action == 'changelog-cleanup' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check changelog cleanup action types
+        run: pnpm --filter @release-bits/changelog-cleanup check
+      - name: Build changelog cleanup action
+        run: pnpm --filter @release-bits/changelog-cleanup build
+      - name: Verify changelog cleanup action tests
+        run: pnpm --filter @release-bits/changelog-cleanup test
 
   macos:
     name: macOS action

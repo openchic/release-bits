@@ -6,7 +6,7 @@ on:
       action:
         description: Action to publish
         type: choice
-        options: [changelog, build-macos]
+        options: [changelog, changelog-cleanup, build-macos]
         required: true
       version-type:
         description: Semantic version increment
