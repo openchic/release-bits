@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -60,11 +60,18 @@ function repository(t) {
   }
   commit('feat(changelog): add release notes')
   git('push', 'origin', 'HEAD:refs/heads/main')
-  return { root, git, commit, promote, run }
+  return { root, remoteRoot, env, git, commit, promote, run }
 }
 
 test('promotion commits pnpm version, creates feat and fix notes, and preserves sibling actions', (t) => {
   const { root, git, commit, promote, run } = repository(t)
+  const manifestPath = join(root, 'actions/changelog/package.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const failHook = 'node -e "process.exit(43)"'
+  manifest.scripts = { preversion: failHook, version: failHook, postversion: failHook }
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+  commit('chore: add version lifecycle fixture')
+  git('push', 'origin', 'HEAD:refs/heads/main')
   const initialSource = git('rev-parse', 'HEAD')
 
   const first = promote('changelog', 'major')
@@ -119,12 +126,18 @@ test('promotion commits pnpm version, creates feat and fix notes, and preserves 
 })
 
 test('publishes four queued actions verified at the same source', (t) => {
-  const { git, promote } = repository(t)
+  const { root, env, git, promote } = repository(t)
+  const downloads = mkdtempSync(join(tmpdir(), 'release-bits-download-'))
+  t.after(() => rmSync(downloads, { recursive: true, force: true }))
   const source = git('rev-parse', 'HEAD')
   const names = ['changelog', 'changelog-cleanup', 'changelog-release', 'build-macos']
   let previousCommit = source
   for (const name of names) {
     git('switch', '--detach', source)
+    const bundle = join(downloads, name)
+    renameSync(join(root, 'actions', name, 'dist'), bundle)
+    env.RELEASE_BITS_BUNDLE_DIR = bundle
+    env.RELEASE_BITS_BUNDLE_SOURCE = source
     const published = promote(name, 'major')
     assert.equal(published.tag, `${name}-v1.0.0`)
     assert.equal(git('rev-parse', 'HEAD^'), previousCommit)
@@ -139,6 +152,41 @@ test('publishes four queued actions verified at the same source', (t) => {
     assert.equal(git('rev-parse', `v1:actions/${name}`), git('rev-parse', `${tag}:actions/${name}`))
     assert.equal(JSON.parse(git('show', `HEAD:actions/${name}/package.json`)).version, '1.0.0')
   }
+})
+
+test('rejects a bundle from a different source or with a symlink before publishing', (t) => {
+  const { root, env, git, promote } = repository(t)
+  const source = git('rev-parse', 'HEAD')
+  const dist = join(root, 'actions/changelog/dist')
+  const bundle = join(root, 'bundle')
+  renameSync(dist, bundle)
+  env.RELEASE_BITS_BUNDLE_DIR = bundle
+  env.RELEASE_BITS_BUNDLE_SOURCE = '0'.repeat(40)
+  assert.throws(() => promote('changelog', 'major'), /bundle does not match the release source commit/)
+
+  env.RELEASE_BITS_BUNDLE_SOURCE = source
+  symlinkSync('index.mjs', join(bundle, 'linked.mjs'))
+  assert.throws(() => promote('changelog', 'major'), /only regular distribution files/)
+  assert.equal(existsSync(dist), false)
+  assert.equal(git('ls-remote', '--tags', 'origin'), '')
+  assert.equal(git('ls-remote', 'origin', 'refs/heads/main'), `${source}\trefs/heads/main`)
+})
+
+test('rejecting the fixed tag leaves both main and the moving tag unchanged', (t) => {
+  const { root, remoteRoot, git, commit, promote } = repository(t)
+  promote('changelog', 'major')
+  writeFileSync(join(root, 'actions/changelog/old'), 'updated')
+  commit('fix(changelog): update release notes')
+  git('push', 'origin', 'HEAD:refs/heads/main')
+
+  const refs = ['refs/heads/main', 'refs/tags/changelog-v1.0.1', 'refs/tags/v1']
+  const before = git('ls-remote', 'origin', ...refs)
+  const hooks = join(remoteRoot, 'hooks')
+  git('--git-dir', remoteRoot, 'config', 'core.hooksPath', hooks)
+  writeFileSync(join(hooks, 'update'), `#!/bin/sh\n[ "$1" != "${refs[1]}" ]\n`, { mode: 0o755 })
+
+  assert.throws(() => promote('changelog', 'patch'), /hook declined|failed to push/)
+  assert.equal(git('ls-remote', 'origin', ...refs), before)
 })
 
 test('requires a fresh publish run when main contains new source changes', (t) => {

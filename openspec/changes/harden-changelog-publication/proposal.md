@@ -4,6 +4,8 @@ Review found that the Release smoke step omits its required fixture, cleanup lac
 
 Consumers such as CleanU atomically push a version commit and tag, then publish an artifact in a separate job. They need to reuse that tag and safely retry Release publication with the same artifact.
 
+The credential review found that Git inherited Action secrets, commit evidence could contain credentials, and the maintainer publication job rebuilt bundles with write permissions.
+
 ## What Changes
 
 - Include cleanup in Action testing and publication, and trigger CI on shared source changes.
@@ -12,12 +14,13 @@ Consumers such as CleanU atomically push a version commit and tag, then publish 
 - Preserve changelog branches that have moved or are used by an open PR.
 - Check GitHub attachment limits before writing, report file read failures, and document standalone usage.
 - Allow queued Action publications from the same verified commit to append their version commits to `main` in order.
+- Keep Action secrets out of Git subprocesses, block suspected credentials before sending changelog evidence, and publish the bundle built by the read-only verification job.
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `changelog-action`: Verify changes under `shared/`.
+- `changelog-action`: Verify changes under `shared/`, isolate credentials, and publish the verified bundle.
 - `changelog-cleanup`: Verify and publish the cleanup Action through the repository workflows.
 - `changelog-release`: Create or reuse a validated version tag and resume an interrupted Release without overwriting conflicting content.
 

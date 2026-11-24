@@ -32,6 +32,20 @@ on:
         required: false
         type: boolean
         default: false
+      upload-release-bundle:
+        description: Upload the verified bundle for the selected Action.
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      bundle-id:
+        description: Artifact ID of the verified Action bundle.
+        value: ${{ jobs.changelog.outputs.bundle-id || jobs.changelog-cleanup.outputs.bundle-id ||
+          jobs.changelog-release.outputs.bundle-id || jobs.macos.outputs.bundle-id }}
+      bundle-source:
+        description: Commit checked out by the verification job.
+        value: ${{ jobs.changelog.outputs.bundle-source || jobs.changelog-cleanup.outputs.bundle-source ||
+          jobs.changelog-release.outputs.bundle-source || jobs.macos.outputs.bundle-source }}
 
 permissions:
   contents: read
@@ -41,8 +55,14 @@ jobs:
     name: Changelog action
     if: ${{ inputs.action == '' || inputs.action == 'changelog' }}
     runs-on: ubuntu-latest
+    outputs:
+      bundle-id: ${{ steps.bundle.outputs.artifact-id }}
+      bundle-source: ${{ steps.checkout.outputs.commit }}
     steps:
       - uses: actions/checkout@v6
+        id: checkout
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -76,13 +96,27 @@ jobs:
             "version":"1.2.3","branch":"changelogs/v1.2.3","pr-url":"https://example.test/pull/12",
             "pr-created":"false"
           }' <<< "$OUTPUTS"
+      - name: Save verified Action bundle
+        id: bundle
+        if: inputs.upload-release-bundle && inputs.action == 'changelog'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-changelog-${{ github.run_attempt }}
+          path: actions/changelog/dist/
+          if-no-files-found: error
 
   changelog-cleanup:
     name: Changelog cleanup action
     if: ${{ inputs.action == '' || inputs.action == 'changelog-cleanup' }}
     runs-on: ubuntu-latest
+    outputs:
+      bundle-id: ${{ steps.bundle.outputs.artifact-id }}
+      bundle-source: ${{ steps.checkout.outputs.commit }}
     steps:
       - uses: actions/checkout@v6
+        id: checkout
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -96,13 +130,27 @@ jobs:
         run: pnpm --filter @release-bits/changelog-cleanup build
       - name: Verify changelog cleanup action tests
         run: pnpm --filter @release-bits/changelog-cleanup test
+      - name: Save verified Action bundle
+        id: bundle
+        if: inputs.upload-release-bundle && inputs.action == 'changelog-cleanup'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-changelog-cleanup-${{ github.run_attempt }}
+          path: actions/changelog-cleanup/dist/
+          if-no-files-found: error
 
   changelog-release:
     name: Changelog release action
     if: ${{ inputs.action == '' || inputs.action == 'changelog-release' }}
     runs-on: ubuntu-latest
+    outputs:
+      bundle-id: ${{ steps.bundle.outputs.artifact-id }}
+      bundle-source: ${{ steps.checkout.outputs.commit }}
     steps:
       - uses: actions/checkout@v6
+        id: checkout
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -137,13 +185,27 @@ jobs:
             "tag-name":"v1.2.3",
             "release-url":"https://example.test/releases/v1.2.3"
           }' <<< "$OUTPUTS"
+      - name: Save verified Action bundle
+        id: bundle
+        if: inputs.upload-release-bundle && inputs.action == 'changelog-release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-changelog-release-${{ github.run_attempt }}
+          path: actions/changelog-release/dist/
+          if-no-files-found: error
 
   macos:
     name: macOS action
     if: ${{ inputs.action == '' || inputs.action == 'build-macos' }}
     runs-on: macos-latest
+    outputs:
+      bundle-id: ${{ steps.bundle.outputs.artifact-id }}
+      bundle-source: ${{ steps.checkout.outputs.commit }}
     steps:
       - uses: actions/checkout@v6
+        id: checkout
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -159,3 +221,11 @@ jobs:
       - name: Verify release script
         if: ${{ inputs.action == 'build-macos' }}
         run: node --test scripts/release.test.mjs
+      - name: Save verified Action bundle
+        id: bundle
+        if: inputs.upload-release-bundle && inputs.action == 'build-macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-build-macos-${{ github.run_attempt }}
+          path: actions/build-macos/dist/
+          if-no-files-found: error

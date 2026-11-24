@@ -95,6 +95,26 @@ test('reuses the default tag after the tag creation response was lost', async ()
   assert.equal(writes.at(-1), 'publish')
 })
 
+test('does not create a tag for an existing draft without a remote tag', async () => {
+  const { api, writes } = fixture()
+  await api.createDraft('v1.2.3', input.body, commit)
+  writes.length = 0
+  await assert.rejects(publishRelease(input, api), /Remote tag v1\.2\.3 does not exist/)
+  assert.deepEqual(writes, [])
+})
+
+test('resumes the same draft after the draft creation response was lost', async () => {
+  const { api, writes } = fixture(commit)
+  const createDraft = api.createDraft
+  api.createDraft = async (...args) => {
+    await createDraft(...args)
+    throw new Error('Request timed out')
+  }
+  await assert.rejects(publishRelease(input, api), /Request timed out/)
+  await publishRelease(input, api)
+  assert.deepEqual(writes, ['draft:v1.2.3', 'upload:App.dmg', 'upload:App-intel.dmg', 'publish'])
+})
+
 test('resumes a draft after partial upload, skips the verified asset and replaces the starter', async () => {
   const { api, assets, state, writes } = fixture()
   const upload = api.uploadAsset
@@ -124,6 +144,17 @@ test('refuses to overwrite a completed asset that does not match the draft', asy
   writes.length = 0
   await assert.rejects(publishRelease(input, api), /does not match the requested file: App\.dmg/)
   assert.deepEqual(writes, [])
+})
+
+test('keeps the draft unpublished when an acknowledged upload is missing from the final asset list', async () => {
+  const { api, state, writes } = fixture(commit)
+  const upload = api.uploadAsset
+  api.uploadAsset = async (release, asset) => {
+    if (asset.name === 'App.dmg') await upload(release, asset)
+  }
+  await assert.rejects(publishRelease(input, api), /Draft Release is missing assets: App-intel\.dmg/)
+  assert.equal(state.release?.draft, true)
+  assert.deepEqual(writes, ['draft:v1.2.3', 'upload:App.dmg'])
 })
 
 test('rejects an unrelated draft or a changed draft body', async () => {

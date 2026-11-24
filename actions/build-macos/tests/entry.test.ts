@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -131,3 +131,70 @@ test('bundled post action cleans only the recorded runner directory', (t) => {
   assert.equal(existsSync(work), false)
   assert.equal(existsSync(other), true)
 })
+
+test('a later notarization failure cleans all packages and writes no partial outputs',
+  { skip: process.platform !== 'darwin' }, (t) => {
+    const temp = mkdtempSync(join(tmpdir(), 'releasebits-batch-'))
+    t.after(() => rmSync(temp, { recursive: true, force: true }))
+    const output = join(temp, 'output')
+    const state = join(temp, 'state')
+    writeFileSync(output, '')
+    writeFileSync(state, '')
+
+    const entry = new URL('../src/index.ts', import.meta.url).href
+    const prepare = new URL('../src/prepare.ts', import.meta.url).href
+    const mocks = {
+      './build.ts': `
+        export const schemeArgs = () => []
+        export const resolveVersion = (version) => version
+        export const projectVersion = () => { throw new Error('unexpected version probe') }
+        export const build = (_root, _work, _args, mode) => ({ mode })
+      `,
+      './credentials.ts': `
+        export const profileData = () => undefined
+        export const withIdentity = (_work, _credentials, use) => use({})
+      `,
+      './package.ts': `
+        import { writeFileSync } from 'node:fs'
+        import { join } from 'node:path'
+        export function createSignedImage(app, _work, output) {
+          const path = join(output, app.mode + '.dmg')
+          writeFileSync(path, app.mode)
+          return path
+        }
+        export function notarize(path) {
+          if (path.endsWith('/intel.dmg')) throw new Error('fixture notarization rejected')
+        }
+        export function describe(mode, path) {
+          console.log('Described package ' + mode)
+          return { mode, path }
+        }
+      `,
+    }
+    const script = `
+      import { registerHooks } from 'node:module'
+      const mocks = ${JSON.stringify(mocks)}
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          const source = context.parentURL === ${JSON.stringify(prepare)} && mocks[specifier]
+          if (source) return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true }
+          return nextResolve(specifier, context)
+        },
+      })
+      await import(${JSON.stringify(entry)})
+    `
+    const child = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+      env: {
+        RUNNER_TEMP: temp, GITHUB_WORKSPACE: temp, GITHUB_OUTPUT: output, GITHUB_STATE: state,
+        INPUT_VERSION: '2.5.0', INPUT_UNIVERSAL: 'true', INPUT_INTEL: 'true',
+        APPLE_DEVELOPER_ID_CERTIFICATE_P12: 'fixture', APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: 'fixture',
+        APPLE_API_KEY: 'fixture', APPLE_API_KEY_ID: 'fixture', APPLE_API_ISSUER_ID: 'fixture',
+      },
+    })
+    const log = child.stdout + child.stderr
+    assert.equal(child.status, 1, log)
+    assert.match(log, /Described package universal[\s\S]*Notarize intel: fixture notarization rejected/)
+    assert.equal(readFileSync(output, 'utf8'), '')
+    assert.deepEqual(readdirSync(temp).sort(), ['output', 'state'])
+  })

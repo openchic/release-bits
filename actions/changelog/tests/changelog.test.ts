@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepare, type Inputs } from '../src/prepare.ts'
@@ -9,6 +9,7 @@ import { evidence, generate, maxLength, validateNotes, warnings } from '../src/n
 import { effectiveVersion } from '../../../shared/version.mts'
 import { catalogPath } from '../src/catalog.ts'
 import { requiredEnv } from '../src/env.ts'
+import { git as actionGit } from '../src/git.ts'
 
 const cwd = process.cwd()
 const notes = { 'zh-CN': ['修复了显示。'], en: ['Fixed display.'] }
@@ -83,6 +84,63 @@ test('requires the standardized credential environment variables', () => {
   }
 })
 
+test('Git receives checkout configuration without Action secrets and only reports a safe failure', (t) => {
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  writeFileSync(join(bin, 'git'), `#!/bin/sh
+if [ "$1" = status ]; then
+  [ -z "\${GITHUB_TOKEN:-}" ] && [ -z "\${LLM_API_KEY:-}" ] || exit 1
+  printf '%s' "$GIT_CONFIG_KEY_0"
+else
+  printf 'synthetic sensitive Git diagnostic\n' >&2
+  exit 42
+fi
+`, { mode: 0o700 })
+  const env = {
+    PATH: `${bin}:${process.env.PATH}`,
+    GITHUB_TOKEN: 'fixture-github-token', LLM_API_KEY: 'fixture-model-key',
+    GIT_CONFIG_KEY_0: 'include.path',
+  }
+  for (const [name, value] of Object.entries(env)) {
+    const previous = process.env[name]
+    process.env[name] = value
+    t.after(() => {
+      if (previous === undefined) delete process.env[name]
+      else process.env[name] = previous
+    })
+  }
+  assert.equal(actionGit('status'), 'include.path')
+  assert.throws(() => actionGit('fetch', 'origin'), { message: 'Git fetch failed (exit code 42)' })
+  assert.equal(process.env.LLM_API_KEY, env.LLM_API_KEY)
+  assert.equal(process.env.GITHUB_TOKEN, env.GITHUB_TOKEN)
+})
+
+const configuredKey = 'fixture-model-api-key-for-credential-check'
+for (const { name, field, credential } of [
+  { name: 'a GitHub token', field: 'title', credential: 'ghp_' + 'x'.repeat(36) },
+  { name: 'the configured model key', field: 'body', credential: configuredKey },
+  { name: 'a Gemini auth key', field: 'body', credential: 'AQ.' + 'x'.repeat(40) },
+  { name: 'a standard Google API key ending in a hyphen', field: 'title', credential: 'AIza' + 'x'.repeat(34) + '-' },
+]) {
+  test(`blocks ${name} in a commit ${field} before contacting Gemini`, async (t) => {
+    const previous = process.env.LLM_API_KEY
+    process.env.LLM_API_KEY = configuredKey
+    t.after(() => {
+      if (previous === undefined) delete process.env.LLM_API_KEY
+      else process.env.LLM_API_KEY = previous
+    })
+    const separator = field === 'title' ? ' ' : '\n\n'
+    commit('app', 'two', `fix: display${separator}${credential}`)
+    const sha = git('rev-parse', 'HEAD').slice(0, 12)
+    const before = readFileSync('changelogs.json', 'utf8')
+    const model = t.mock.method(globalThis, 'fetch', async () => { throw new Error('unexpected request') })
+    await assert.rejects(prepare(input, pulls), { message: `Possible credential in commit ${sha} ${field}` })
+    assert.equal(model.mock.callCount(), 0)
+    assert.equal(readFileSync('changelogs.json', 'utf8'), before)
+    assert.equal(git('ls-remote', 'origin', 'refs/heads/changelogs/v1.1.0'), '')
+  })
+}
+
 test('catalog aliases resolve inside the checkout, including for a new file', () => {
   symlinkSync('.', 'inside')
   symlinkSync(root, 'outside')
@@ -138,6 +196,22 @@ test('new PR title uses an explicit version without an increment', async () => {
     },
   }, fake)
   assert.equal(result.outputs['pr-created'], true)
+})
+
+test('reuses the pushed draft after creating the PR failed', async () => {
+  const branch = 'changelogs/v1.1.0'
+  const ref = 'refs/heads/' + branch
+  const failure = new Error('fixture PR creation failed')
+  await assert.rejects(prepare(input, { ...pulls, create: async () => { throw failure } }, fake), failure)
+  const draft = git('rev-parse', 'HEAD')
+  assert.equal(git('ls-remote', 'origin', ref), `${draft}\t${ref}`)
+
+  git('switch', 'main')
+  const retried = await prepare(input, pulls, async () => { throw new Error('unexpected generation') })
+  assert.deepEqual(retried.outputs, { version: '1.1.0', branch, 'pr-url': url, 'pr-created': true })
+  assert.deepEqual(retried.notes, notes)
+  assert.equal(git('rev-parse', 'HEAD'), draft)
+  assert.equal(git('ls-remote', 'origin', ref), `${draft}\t${ref}`)
 })
 
 test('reject published version and scope/history drift', async () => {

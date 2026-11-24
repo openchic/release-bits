@@ -1,8 +1,18 @@
 import { commitsSince, head } from './git.ts'
 import { requestNotes } from './gemini.ts'
 import { buildPrompt } from './prompt.ts'
+import { CREDENTIAL_NAMES } from './env.ts'
 
 export type Notes = { 'zh-CN': string[], en: string[] }
+
+const CREDENTIAL_FORMATS = [
+  /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b/,
+  /\bAIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])/,
+  /\bAQ\.[A-Za-z0-9_-]{20,}/,
+  /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/,
+  /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/,
+  /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----/,
+]
 
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -69,9 +79,15 @@ export function evidence(commits: ReturnType<typeof commitsSince>) {
     }
     return active.get(sha)!
   }
+  const secrets = CREDENTIAL_NAMES.map((name) => process.env[name]).filter((value): value is string => Boolean(value))
   const items = []
   for (const commit of commits) {
     if (!reverts.has(commit.sha) && isActive(commit.sha) && /^(feat|fix)(?:\([^)\n]*\))?!?:\s*\S/.test(commit.subject)) {
+      for (const [field, value] of [['title', commit.subject], ['body', commit.body]]) {
+        if (secrets.some((secret) => value.includes(secret)) || CREDENTIAL_FORMATS.some((pattern) => pattern.test(value))) {
+          throw new Error(`Possible credential in commit ${commit.sha.slice(0, 12)} ${field}`)
+        }
+      }
       items.push(commit.body ? { subject: commit.subject, body: commit.body } : { subject: commit.subject })
     }
   }

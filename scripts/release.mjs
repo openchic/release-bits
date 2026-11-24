@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 
 function git(args, input) {
@@ -48,6 +48,25 @@ function requireBuiltAction(packagePath) {
   if (!existsSync(distPath) || !readdirSync(distPath).length) {
     throw new Error('Build the selected Action before publishing')
   }
+}
+
+function restoreVerifiedBundle(packagePath, source) {
+  const bundle = process.env.RELEASE_BITS_BUNDLE_DIR
+  if (!bundle) return
+  if (process.env.RELEASE_BITS_BUNDLE_SOURCE !== source) {
+    throw new Error('Verified bundle does not match the release source commit')
+  }
+  const dist = join(packagePath, 'dist')
+  if (!lstatSync(bundle).isDirectory() || existsSync(dist)) {
+    throw new Error('Expected a downloaded bundle and an empty release checkout')
+  }
+  const files = readdirSync(bundle, { withFileTypes: true })
+  if (!files.some((file) => file.name === 'index.mjs') ||
+      files.some((file) => !file.isFile() || file.name.startsWith('.'))) {
+    throw new Error('Verified bundle must contain index.mjs and only regular distribution files')
+  }
+  mkdirSync(dist)
+  for (const { name } of files) copyFileSync(join(bundle, name), join(dist, name))
 }
 
 function readPackage(ref, path) {
@@ -143,6 +162,7 @@ function promote(action, versionType, sourceRef) {
   }
   const packagePath = 'actions/' + action
   git(['cat-file', '-e', source + ':' + packagePath + '/action.yml'])
+  restoreVerifiedBundle(packagePath, source)
   requireBuiltAction(packagePath)
   git(['fetch', '--force', '--tags', 'origin', 'refs/heads/main:refs/remotes/origin/main'])
   const tags = new Set(git(['tag', '--list']).trimEnd().split('\n').filter(Boolean))
@@ -182,7 +202,7 @@ function promote(action, versionType, sourceRef) {
     if (base !== source) git(['switch', '--detach', base])
 
     try {
-      execFileSync('pnpm', ['version', versionType, '--no-git-tag-version'], {
+      execFileSync('pnpm', ['version', versionType, '--no-git-tag-version', '--config.ignore-scripts=true'], {
         cwd: packagePath,
         stdio: ['ignore', 'pipe', 'pipe'],
       })

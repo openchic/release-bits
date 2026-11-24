@@ -26,6 +26,7 @@ jobs:
     with:
       action: ${{ inputs.action }}
       skip-action-smoke-test: true
+      upload-release-bundle: true
 
   publish:
     needs: verify
@@ -45,17 +46,28 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Install release dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build selected action
+      - name: Verify bundle reference
         env:
-          ACTION: ${{ inputs.action }}
-        run: pnpm --filter "@release-bits/${ACTION}" build
+          BUNDLE_ID: ${{ needs.verify.outputs.bundle-id }}
+          BUNDLE_SOURCE: ${{ needs.verify.outputs.bundle-source }}
+        run: |
+          [[ "$BUNDLE_ID" =~ ^[1-9][0-9]*$ && "$BUNDLE_SOURCE" == "$GITHUB_SHA" ]] || {
+            echo 'Expected a verified bundle from the release source commit.' >&2
+            exit 1
+          }
+      - name: Download verified Action bundle
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify.outputs.bundle-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/release-bundle
       - name: Publish selected action
         env:
           ACTION: ${{ inputs.action }}
           VERSION_TYPE: ${{ inputs.version-type }}
           GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_BITS_BUNDLE_DIR: ${{ runner.temp }}/release-bundle
+          RELEASE_BITS_BUNDLE_SOURCE: ${{ needs.verify.outputs.bundle-source }}
           RELEASE_BITS_RELEASE_NOTES_FILE: ${{ runner.temp }}/release-bits-release-notes.md
         run: |
           set -euo pipefail

@@ -1,15 +1,26 @@
 import { spawnSync } from 'node:child_process'
+import { CREDENTIAL_NAMES } from './env.ts'
+
+const OPERATIONS = new Set(['add', 'check-ref-format', 'commit', 'describe', 'diff', 'fetch', 'log',
+  'ls-remote', 'ls-tree', 'merge-base', 'push', 'rev-parse', 'show', 'status', 'switch'])
+
+function operation(args: string[]) {
+  return args.find((arg) => OPERATIONS.has(arg)) ?? 'operation'
+}
 
 export function gitResult(...args: string[]) {
-  const result = spawnSync('git', args, { encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 })
-  if (result.error) throw result.error
-  if (result.status === null) throw new Error('Git process interrupted')
-  return result
+  const env = { ...process.env }
+  for (const name of CREDENTIAL_NAMES) delete env[name]
+  const result = spawnSync('git', args, {
+    env, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
+  })
+  if (result.error || result.status === null) throw new Error(`Git ${operation(args)} did not complete`)
+  return { status: result.status, stdout: result.stdout }
 }
 
 export function git(...args: string[]) {
   const result = gitResult(...args)
-  if (result.status !== 0) throw new Error(result.stderr.trim() || 'Git command failed')
+  if (result.status !== 0) throw new Error(`Git ${operation(args)} failed (exit code ${result.status})`)
   return result.stdout
 }
 

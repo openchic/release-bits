@@ -25,3 +25,13 @@
 - [x] 5.3 Verify tag conflicts, partial uploads, lost publication responses and the packaged Action with mocks. Validate workflow YAML and OpenSpec.
 - [x] 5.4 Verify same-size asset replacement and edits made during upload. Update the merged PR workflow example to reuse the build artifact on publication retries.
 - [x] 5.5 Stage attachments before hashing and uploading. Verify source removal, replacement with preserved modification time, and staging cleanup after success or failure.
+
+## 6. Regression coverage
+
+- [x] 6.1 Verify packaged binary upload and resumption across processes, remote conflict cases, draft creation response loss, and final attachment validation.
+- [x] 6.2 Verify atomic ref rejection, Gemini request handling, changelog PR recovery, packaged cleanup, and multi-package notarization failure cleanup.
+
+## 7. Credential boundaries
+
+- [x] 7.1 Isolate Git from Action secrets and block suspected credentials in commit evidence. Verify that rejected evidence does not reach Gemini.
+- [x] 7.2 Publish the verified bundle without rebuilding in the write job. Verify artifact validation, queued publication, atomic ref rejection, and workflow YAML.

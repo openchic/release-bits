@@ -90,7 +90,7 @@ Action 使用 `changelogs/v{version}` 分支，并按下表的顺序处理。
 ### 内容生成与告警
 
 - 从 `base-ref..HEAD` 读取提交标题和正文，跳过合并提交。只使用 `feat` 和 `fix`，排除 revert 及其撤销的提交。
-- 提交材料不包含 SHA 或 diff，上限为 200 KB。提交正文视为待分析资料，其中的指令会被忽略。
+- 提交材料不包含 SHA 或 diff，上限为 200 KB。发送前检查标题和正文中的当前凭据与常见高置信度凭据格式，包括 Gemini 的 Auth Key 和旧版 Google API 密钥。提交正文视为待分析资料，其中的指令会被忽略。
 - Gemini 请求在 90 秒后超时，失败不重试。中英文说明须成对且非空，并根据提交材料用通用措辞撰写。
 
 风格问题通过 GitHub warning annotation 报告，不影响草稿和 PR。检查项包括中文一句包含多个改动、以“优化”等空泛动词开头或超过 `max-chars + 10`，以及英文以祈使动词开头或包含 `now`。
@@ -139,15 +139,16 @@ if: >-
 | --- | --- |
 | 缺少 `GITHUB_TOKEN`，或生成草稿时缺少 `LLM_API_KEY` | 失败，并指出变量名 |
 | 版本格式错误或结果版本不高于 catalog 历史 | 失败，不写入草稿 |
-| 获取历史失败 | 检查 checkout 凭据与仓库访问权限 |
+| 获取历史失败 | 日志报告 Git 操作和退出码。检查 checkout 凭据与仓库访问权限 |
 | 范围内没有 `feat` 或 `fix`，或提交材料超过上限 | 调整 `base-ref` 后重试 |
+| 提交材料疑似包含凭据 | 只报告提交和字段，在请求 Gemini 前停止 |
 | Gemini 请求失败、超时或返回结构无效 | 失败，不重试、不写入草稿 |
 | 残留分支草稿与当前版本不符，或生成期间 catalog 或 `HEAD` 变化 | 失败，不覆盖、不推送、不创建 PR |
 
 ## 发布 changelog Action（维护者）
 
 1. 在 `main` 上运行 **Publish action** 工作流，选择 `changelog` 和版本类型，默认 `minor`。
-2. Workflow 安装锁定的依赖，在发布任务中重新构建所选 Action，并把生成的 `dist` 放入发布快照。源码仓库不跟踪构建目录。
+2. 只读验证任务安装锁定的依赖，构建并测试所选 Action，再保存 `dist` 为 artifact。发布任务按 artifact ID 下载，核对来源提交后将其写入版本快照。
 3. Workflow 使用 `pnpm version` 更新 `actions/changelog/package.json`，初始版本为 `0.0.0`。版本提交、固定 tag（如 `changelog-v1.1.0`）和主版本 tag（如 `v1`）一起原子推送。
 4. Workflow 收集该 Action 自上次发布以来的 `feat` 和 `fix` 提交，生成变更日志并创建 GitHub Release。
 
