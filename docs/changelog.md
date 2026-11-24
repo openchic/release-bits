@@ -33,6 +33,8 @@ jobs:
 
 手动触发与 PR 关闭清理的完整配置见 [release-notes workflow 示例](../examples/release-notes.yml)。
 
+完整示例将 `changelog` 的 `base-branch` 和 `pull_request.branches` 都设为 `main`。更换目标分支时同步修改这两处，确保 PR 关闭后能触发清理。
+
 ## 输入与输出
 
 ### 输入
@@ -119,16 +121,17 @@ Action 原子写入 catalog 并只提交该文件。文件不存在时创建数�
 
 ### 合并后的 App 发布
 
-App 仓库可在同一个 `closed` 事件中触发自己的发布任务。以下条件将任务限定在已合并的 `changelogs/` PR。
+App 仓库可在同一个 `pull_request.closed` 事件中调用 `changelog-release`。用以下条件将发布 job 限定在已合并的同仓库 changelog PR。
 
 ```yaml
 if: >-
   github.event_name == 'pull_request' &&
   github.event.pull_request.merged == true &&
-  startsWith(github.event.pull_request.head.ref, 'changelogs/')
+  github.event.pull_request.head.repo.full_name == github.repository &&
+  startsWith(github.event.pull_request.head.ref, 'changelogs/v')
 ```
 
-App 的 tag、GitHub Release、appcast 和打包由 App 仓库自己的 workflow 完成。
+发布 job 检出合并提交并传入版本。`changelog-release` 创建 tag、发布 Release 并上传附件。项目自己的 workflow 负责构建和更新 appcast。完整配置见 [合并 PR 后发布示例](changelog-release.md#合并-pr-后发布)。
 
 ## 失败行为
 

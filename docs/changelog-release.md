@@ -8,12 +8,7 @@
 
 ## 职责边界
 
-调用方 workflow 负责：
-
-- 监听 `pull_request.closed` 事件，并筛选已合并、来自同一仓库且分支名为 `changelogs/v{version}` 的 PR。
-- checkout PR 的 `merge_commit_sha`，确保读取的是合并后最终确认的 catalog。
-- 按项目需要构建、签名和准备发布文件。
-- 调用 Action，并传入版本、catalog 路径和待上传文件。
+调用方 workflow 选择触发方式，检出要发布的提交，准备所需附件，并显式传入版本。合并后自动发布时，监听 `pull_request.closed`，筛选同仓库已合并的 `changelogs/v{version}` PR，再 checkout 对应的 `merge_commit_sha`。
 
 `changelog-release` Action 负责：
 
@@ -91,13 +86,13 @@ jobs:
 | `catalog-path` | 否 | `changelogs.json` | 相对于 checkout 后仓库根目录的路径 |
 | `files` | 否 | — | 待上传到 Release 的文件路径，每行一个，相对于仓库根目录；支持多个文件 |
 
-tag 和 Release 名称默认为 `v{version}`。tag 指向当前 checkout 的提交；合并 PR 时，调用方应 checkout `merge_commit_sha`。
+tag 和 Release 名称均为 `v{version}`。tag 指向当前 checkout 的提交。
 
 ### 输出
 
 | 输出 | 说明 |
 | --- | --- |
-| `notes-en` | 格式化为 Markdown 的英文发布说明，每个条目一行，以 `- ` 开头 |
+| `notes-en` | 格式化为 Markdown 列表的英文发布说明，每条说明对应一个列表项 |
 | `tag-name` | 创建的版本 tag，例如 `v1.2.3` |
 | `release-url` | 已发布的 GitHub Release 页面链接 |
 

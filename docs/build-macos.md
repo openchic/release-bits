@@ -89,7 +89,9 @@
 
 ## 调用方发布
 
-Universal 包沿用 `{app-name}-{version}.dmg`，Intel 和 Apple Silicon 包分别加上 `-intel.dmg` 和 `-apple-silicon.dmg` 后缀，例如 `App-1.2.3-intel.dmg`。调用方可根据 `packages-json` 中的文件名、SHA-256 和字节数生成下载元数据，并管理自己的版本提交、tag、GitHub Release 和 appcast。
+Universal 包沿用 `{app-name}-{version}.dmg`，Intel 和 Apple Silicon 包分别加上 `-intel.dmg` 和 `-apple-silicon.dmg` 后缀，例如 `App-1.2.3-intel.dmg`。调用方可根据 `packages-json` 中的文件名、SHA-256 和字节数生成下载元数据，并管理自己的版本提交和 appcast。
+
+使用 `changelog-release` 发布 DMG 时，将 `packages-json` 中的文件从 runner 临时目录复制到仓库内，例如 `dist/`，再把仓库相对路径传给 `files`。跨 job 发布时，在构建 job 上传 artifact，在发布 job 下载到仓库内。见 [changelog-release 文档](changelog-release.md#输入与输出)。
 
 调用方可用示例中的 `${{ steps.package.outputs.version }}` 更新项目的版本源文件或生成发布记录。
 

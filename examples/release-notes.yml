@@ -30,6 +30,7 @@ jobs:
         with:
           version: ${{ inputs.version }}
           version-type: ${{ inputs.version_type != 'none' && inputs.version_type || '' }}
+          base-branch: main
         env:
           GITHUB_TOKEN: ${{ github.token }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
