@@ -1,4 +1,5 @@
 name: Publish action
+run-name: Publish ${{ inputs.action }} (${{ inputs.version-type }})
 
 on:
   workflow_dispatch:
