@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { realpathSync, statSync, readFileSync as readFileSync$1, accessSync, constants as constants$5, openAsBlob } from 'node:fs';
+import { copyFile as copyFile$1, mkdtemp, rm as rm$1 } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, isAbsolute, resolve, basename, relative, sep as sep$1 } from 'node:path';
 import * as os from 'os';
 import os__default, { EOL } from 'os';
 import * as crypto from 'crypto';
@@ -27,7 +29,7 @@ import require$$1$2 from 'node:zlib';
 import require$$5$1 from 'node:perf_hooks';
 import require$$8$1 from 'node:util/types';
 import require$$1$1 from 'node:worker_threads';
-import require$$10 from 'node:crypto';
+import require$$10, { createHash } from 'node:crypto';
 import require$$6$1 from 'node:http2';
 import require$$1$3 from 'node:url';
 import require$$5$2 from 'node:async_hooks';
@@ -36,7 +38,7 @@ import require$$1$5 from 'node:dns';
 import require$$5$3 from 'string_decoder';
 import 'child_process';
 import 'timers';
-import { isAbsolute, resolve, basename, relative, sep as sep$1 } from 'node:path';
+import { realpathSync, statSync, readFileSync as readFileSync$1, constants as constants$5, openAsBlob, accessSync } from 'node:fs';
 
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -28802,6 +28804,14 @@ function error(message, properties = {}) {
     issueCommand('error', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
+ * Adds a warning issue
+ * @param message warning issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
+ */
+function warning(message, properties = {}) {
+    issueCommand('warning', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+/**
  * Writes info to log with console.log.
  * @param message info message
  */
@@ -34160,6 +34170,96 @@ function requiredEnv(name) {
     return value;
 }
 
+function releaseDetails(data) {
+    const { id, html_url: url, upload_url: uploadUrl, tag_name: tagName, name, body, draft, prerelease } = data;
+    return { id, url, uploadUrl, tagName, name, body, draft, prerelease };
+}
+function githubReleaseApi(token, repo) {
+    const octokit = getOctokit(token, { request: { timeout: 120_000 } });
+    return {
+        async findTagCommit(tagName) {
+            let target;
+            try {
+                const { data } = await octokit.rest.git.getRef({ ...repo, ref: `tags/${tagName}` });
+                target = data.object;
+            }
+            catch (error) {
+                if (error && typeof error === 'object' && 'status' in error && error.status === 404)
+                    return;
+                throw error;
+            }
+            while (target.type === 'tag') {
+                const { data } = await octokit.rest.git.getTag({ ...repo, tag_sha: target.sha });
+                target = data.object;
+            }
+            if (target.type !== 'commit')
+                throw new Error(`Remote tag ${tagName} does not point to a commit`);
+            return target.sha;
+        },
+        async findRelease(tagName) {
+            let match;
+            const pages = octokit.paginate.iterator(octokit.rest.repos.listReleases, { ...repo, per_page: 100 });
+            for await (const { data } of pages) {
+                for (const release of data) {
+                    if (release.tag_name !== tagName)
+                        continue;
+                    if (match)
+                        throw new Error(`Multiple Releases match tag ${tagName}`);
+                    match = releaseDetails(release);
+                }
+            }
+            return match;
+        },
+        async createTag(tagName, sha) {
+            await octokit.rest.git.createRef({ ...repo, ref: `refs/tags/${tagName}`, sha });
+        },
+        async getRelease(releaseId) {
+            const { data } = await octokit.rest.repos.getRelease({ ...repo, release_id: releaseId });
+            return releaseDetails(data);
+        },
+        async createDraft(tagName, body, targetCommit) {
+            const { data } = await octokit.rest.repos.createRelease({
+                ...repo,
+                tag_name: tagName,
+                target_commitish: targetCommit,
+                name: tagName,
+                body,
+                draft: true,
+                prerelease: false,
+            });
+            return releaseDetails(data);
+        },
+        async listAssets(releaseId) {
+            return octokit.paginate(octokit.rest.repos.listReleaseAssets, {
+                ...repo, release_id: releaseId, per_page: 100,
+            });
+        },
+        async deleteAsset(assetId) {
+            await octokit.rest.repos.deleteReleaseAsset({ ...repo, asset_id: assetId });
+        },
+        async uploadAsset(release, asset) {
+            const url = new URL(release.uploadUrl.replace(/\{\?name,label\}$/, ''));
+            url.searchParams.set('name', asset.name);
+            url.searchParams.set('label', asset.name);
+            await octokit.request(`POST ${url}`, {
+                data: asset.blob,
+                headers: { 'content-type': 'application/octet-stream' },
+                request: { redirect: 'error' },
+            });
+        },
+        async publishDraft(releaseId, body, targetCommit) {
+            const { data } = await octokit.rest.repos.updateRelease({
+                ...repo,
+                release_id: releaseId,
+                target_commitish: targetCommit,
+                draft: false,
+                body,
+            });
+            return data.html_url;
+        },
+    };
+}
+
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const BUMPS = ['major', 'minor', 'patch'];
 function parts(version) {
@@ -34267,37 +34367,106 @@ function prepareAssets(root, inputs) {
         return asset;
     });
 }
-
-function message(error) {
-    return error instanceof Error ? error.message : String(error);
+async function stageAssets(files, directory) {
+    const assets = [];
+    for (const file of files) {
+        const stagedPath = join(directory, String(assets.length));
+        await copyFile$1(file.path, stagedPath, constants$5.COPYFILE_FICLONE);
+        const blob = await openAsBlob(stagedPath);
+        if (blob.size !== file.size)
+            throw new Error(`Release asset size changed after validation: ${file.name}`);
+        const hash = createHash('sha256');
+        for await (const chunk of blob.stream())
+            hash.update(chunk);
+        assets.push({ name: file.name, size: blob.size, sha256: hash.digest('hex'), blob });
+    }
+    return assets;
 }
-/** Publish notes and assets for a new tag, leaving any partial result for inspection. */
-async function publishRelease(version, body, targetCommit, assets, api) {
+
+function assertTag(tagName, actual, expected) {
+    if (!actual)
+        throw new Error(`Remote tag ${tagName} does not exist`);
+    if (actual !== expected) {
+        throw new Error(`Remote tag ${tagName} points to ${actual}, expected ${expected}`);
+    }
+}
+function draftBody({ version, body, targetCommit, assets }) {
+    const files = assets.map(({ name, size, sha256 }) => JSON.stringify([name, size, sha256])).sort();
+    const fingerprint = createHash('sha256').update(JSON.stringify([version, targetCommit, body, files]));
+    return `${body}\n\n<!-- release-bits:publish:v1:${fingerprint.digest('hex')} -->`;
+}
+function assertRelease(release, tagName, expectedBody) {
+    if (release.tagName !== tagName || release.name !== tagName || release.prerelease || release.body !== expectedBody) {
+        throw new Error(`Release ${tagName} does not match the requested publication`);
+    }
+}
+function compareAssets(release, expectedAssets, remoteAssets) {
+    const pending = new Map(expectedAssets.map((asset) => [asset.name, asset]));
+    const starters = new Map();
+    for (const asset of remoteAssets) {
+        const name = pending.has(asset.name) ? asset.name : asset.label || asset.name;
+        const expected = pending.get(name);
+        if (!expected || starters.has(name))
+            throw new Error(`Unexpected Release asset: ${asset.name}`);
+        if (release.draft && asset.state === 'starter' && asset.size === 0) {
+            starters.set(name, asset.id);
+        }
+        else if (asset.state === 'uploaded' && asset.size === expected.size &&
+            asset.digest === `sha256:${expected.sha256}`) {
+            pending.delete(name);
+        }
+        else {
+            throw new Error(`Release asset does not match the requested file: ${name}`);
+        }
+    }
+    return { pending, starters };
+}
+async function publishRelease(publication, api) {
+    const { version, body, targetCommit, assets, existingTag } = publication;
     if (!targetCommit)
         throw new Error('Checked-out commit is required');
-    const tagName = 'v' + version;
-    if (await api.hasRelease(tagName)) {
-        throw new Error(`Release ${tagName} already exists; refusing to modify it`);
-    }
+    const tagName = existingTag || `v${version}`;
+    const expectedDraftBody = draftBody(publication);
+    let release;
     try {
-        await api.createTag(tagName, targetCommit);
+        const remoteCommit = await api.findTagCommit(tagName);
+        release = await api.findRelease(tagName);
+        if (remoteCommit || existingTag || release) {
+            assertTag(tagName, remoteCommit, targetCommit);
+        }
+        else {
+            await api.createTag(tagName, targetCommit);
+        }
+        release ??= await api.createDraft(tagName, expectedDraftBody, targetCommit);
+        assertRelease(release, tagName, release.draft ? expectedDraftBody : body);
+        const { pending, starters } = compareAssets(release, assets, await api.listAssets(release.id));
+        if (!release.draft) {
+            if (pending.size)
+                throw new Error(`Published Release is missing assets: ${[...pending.keys()].join(', ')}`);
+            return { tagName, url: release.url };
+        }
+        for (const [name, asset] of pending) {
+            const starter = starters.get(name);
+            if (starter !== undefined)
+                await api.deleteAsset(starter);
+            await api.uploadAsset(release, asset);
+        }
+        const remaining = compareAssets(release, assets, await api.listAssets(release.id)).pending;
+        if (remaining.size) {
+            throw new Error(`Draft Release is missing assets: ${[...remaining.keys()].join(', ')}`);
+        }
+        assertTag(tagName, await api.findTagCommit(tagName), targetCommit);
+        release = await api.getRelease(release.id);
+        assertRelease(release, tagName, release.draft ? expectedDraftBody : body);
+        if (!release.draft)
+            return { tagName, url: release.url };
+        const url = await api.publishDraft(release.id, body, targetCommit);
+        return { tagName, url: url || release.url };
     }
     catch (error) {
-        throw new Error(`Unable to create tag ${tagName}: ${message(error)}`, { cause: error });
-    }
-    let draft;
-    try {
-        draft = await api.createDraft({ tagName, body });
-        for (const asset of assets)
-            await api.uploadAsset(draft, asset);
-        const published = await api.publishDraft(draft.id);
-        return { tagName, url: published.url || draft.url };
-    }
-    catch (error) {
-        const recovery = draft
-            ? `check the Release at ${draft.url} and tag ${tagName}`
-            : `tag ${tagName} was created; check for a draft Release before retrying`;
-        throw new Error(`Unable to publish ${tagName}; ${recovery}: ${message(error)}`, { cause: error });
+        const location = release?.url ? ` (${release.url})` : '';
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Unable to publish ${tagName}${location}: ${message}`, { cause: error });
     }
 }
 
@@ -34313,70 +34482,32 @@ function head(root) {
         throw new Error('Unable to resolve the checked-out commit; checkout the target release commit first');
     }
 }
-function uploadUrl(template, name) {
-    const endpoint = template.replace(/\{\?name,label\}$/, '');
-    const url = new URL(endpoint);
-    url.searchParams.set('name', name);
-    return url.toString();
-}
 async function run() {
     const root = workspaceRoot(process.env.GITHUB_WORKSPACE || process.cwd());
     const versionInput = getInput('version', { required: true });
     const catalog = loadNotes(root, getInput('catalog-path') || 'changelogs.json', versionInput);
-    const assets = prepareAssets(root, getMultilineInput('files'));
     const targetCommit = head(root);
     const token = requiredEnv('GITHUB_TOKEN');
-    const octokit = getOctokit(token, { request: { timeout: 120_000 } });
-    const repo = context.repo;
-    const release = await publishRelease(catalog.version, catalog.markdown, targetCommit, assets, {
-        hasRelease: async (tagName) => {
-            const pages = octokit.paginate.iterator(octokit.rest.repos.listReleases, {
-                ...repo,
-                per_page: 100,
-            });
-            for await (const { data } of pages) {
-                if (data.some((release) => release.tag_name === tagName))
-                    return true;
-            }
-            return false;
-        },
-        createTag: async (tagName, sha) => {
-            await octokit.rest.git.createRef({ ...repo, ref: 'refs/tags/' + tagName, sha });
-        },
-        createDraft: async ({ tagName, body }) => {
-            const { data } = await octokit.rest.repos.createRelease({
-                ...repo,
-                tag_name: tagName,
-                name: tagName,
-                body,
-                draft: true,
-                prerelease: false,
-            });
-            return { id: data.id, url: data.html_url, uploadUrl: data.upload_url };
-        },
-        uploadAsset: async (release, asset) => {
-            const file = await openAsBlob(asset.path);
-            if (file.size !== asset.size) {
-                throw new Error(`Release asset size changed after validation: ${asset.name}`);
-            }
-            await octokit.request(`POST ${uploadUrl(release.uploadUrl, asset.name)}`, {
-                data: file,
-                headers: { 'content-type': 'application/octet-stream' },
-                request: { redirect: 'error' },
-            });
-        },
-        publishDraft: async (releaseId) => {
-            const { data } = await octokit.rest.repos.updateRelease({
-                ...repo,
-                release_id: releaseId,
-                draft: false,
-            });
-            return { url: data.html_url };
-        },
-    });
-    setOutput('notes-en', catalog.markdown);
-    setOutput('tag-name', release.tagName);
-    setOutput('release-url', release.url);
-    info(`Published ${release.tagName}: ${release.url}`);
+    const files = prepareAssets(root, getMultilineInput('files'));
+    const staging = await mkdtemp(join(process.env.RUNNER_TEMP || tmpdir(), 'release-bits-assets-'));
+    try {
+        const assets = await stageAssets(files, staging);
+        const release = await publishRelease({
+            version: catalog.version,
+            body: catalog.markdown,
+            targetCommit,
+            assets,
+            existingTag: getInput('tag-name'),
+        }, githubReleaseApi(token, context.repo));
+        setOutput('notes-en', catalog.markdown);
+        setOutput('tag-name', release.tagName);
+        setOutput('release-url', release.url);
+        info(`Published ${release.tagName}: ${release.url}`);
+    }
+    finally {
+        await rm$1(staging, { recursive: true, force: true }).catch((error) => {
+            warning(`Unable to clean up staged release assets: ${error.message}`);
+        });
+    }
 }
 run().catch((error) => setFailed(error instanceof Error ? error.message : String(error)));

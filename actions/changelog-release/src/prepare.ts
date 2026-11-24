@@ -1,11 +1,14 @@
-import { accessSync, constants, readFileSync, realpathSync, statSync } from 'node:fs'
-import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
+import { createHash } from 'node:crypto'
+import { accessSync, constants, openAsBlob, readFileSync, realpathSync, statSync } from 'node:fs'
+import { copyFile } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { effectiveVersion } from '../../../shared/version.mts'
 
 const MAX_ASSETS = 1_000
 const ASSET_SIZE_LIMIT = 2 * 1024 ** 3
 
-export type ReleaseAsset = { path: string, name: string, size: number }
+type AssetFile = { path: string, name: string, size: number }
+export type ReleaseAsset = { name: string, size: number, sha256: string, blob: Blob }
 export type ReleaseNotes = { version: string, notesEn: string[], markdown: string }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -78,7 +81,7 @@ export function loadNotes(root: string, catalogPath: string, versionInput: strin
   return { version, notesEn, markdown }
 }
 
-export function prepareAssets(root: string, inputs: string[]): ReleaseAsset[] {
+export function prepareAssets(root: string, inputs: string[]): AssetFile[] {
   if (inputs.length > MAX_ASSETS) throw new Error(`A Release can have at most ${MAX_ASSETS} assets`)
   const repository = workspaceRoot(root)
   const names = new Set<string>()
@@ -92,4 +95,18 @@ export function prepareAssets(root: string, inputs: string[]): ReleaseAsset[] {
     names.add(key)
     return asset
   })
+}
+
+export async function stageAssets(files: AssetFile[], directory: string): Promise<ReleaseAsset[]> {
+  const assets: ReleaseAsset[] = []
+  for (const file of files) {
+    const stagedPath = join(directory, String(assets.length))
+    await copyFile(file.path, stagedPath, constants.COPYFILE_FICLONE)
+    const blob = await openAsBlob(stagedPath)
+    if (blob.size !== file.size) throw new Error(`Release asset size changed after validation: ${file.name}`)
+    const hash = createHash('sha256')
+    for await (const chunk of blob.stream()) hash.update(chunk)
+    assets.push({ name: file.name, size: blob.size, sha256: hash.digest('hex'), blob })
+  }
+  return assets
 }

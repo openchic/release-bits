@@ -1,101 +1,175 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { publishRelease, type ReleaseApi } from '../src/publish.ts'
-import type { ReleaseAsset } from '../src/prepare.ts'
+import { publishRelease, type Release, type ReleaseApi } from '../src/publish.ts'
 
-const assets: ReleaseAsset[] = [
-  { path: '/workspace/App.dmg', name: 'App.dmg', size: 10 },
-  { path: '/workspace/App-intel.dmg', name: 'App-intel.dmg', size: 5 },
-]
-
-function api(overrides: Partial<ReleaseApi> = {}, calls: string[] = []): ReleaseApi {
-  return {
-    hasRelease: async (tagName) => { calls.push(`find-release:${tagName}`); return false },
-    createTag: async (tagName, targetCommit) => { calls.push(`tag:${tagName}:${targetCommit}`) },
-    createDraft: async ({ tagName, body }) => {
-      calls.push(`draft:${tagName}:${body}`)
-      return {
-        id: 7,
-        url: 'https://example.test/releases/v1.2.3',
-        uploadUrl: 'https://uploads.example.test/releases/7/assets{?name,label}',
-      }
-    },
-    uploadAsset: async (_release, asset) => { calls.push('upload:' + asset.name) },
-    publishDraft: async () => {
-      calls.push('publish')
-      return { url: 'https://example.test/releases/v1.2.3' }
-    },
-    ...overrides,
-  }
+const commit = 'a'.repeat(40)
+const url = 'https://example.test/releases/v1.2.3'
+const input = {
+  version: '1.2.3',
+  body: '- Fixed the issue.',
+  targetCommit: commit,
+  assets: [
+    { name: 'App.dmg', blob: new Blob(['universal!']), size: 10, sha256: 'a'.repeat(64) },
+    { name: 'App-intel.dmg', blob: new Blob(['intel']), size: 5, sha256: 'b'.repeat(64) },
+  ],
 }
 
-test('creates the tag and draft, uploads all assets, then publishes the Release', async () => {
-  const calls: string[] = []
-  const result = await publishRelease('1.2.3', '- Fixed the issue.', 'a'.repeat(40), assets,
-    api({}, calls))
-
-  assert.deepEqual(result, {
-    tagName: 'v1.2.3',
-    url: 'https://example.test/releases/v1.2.3',
-  })
-  assert.deepEqual(calls, [
-    'find-release:v1.2.3',
-    `tag:v1.2.3:${'a'.repeat(40)}`,
-    'draft:v1.2.3:- Fixed the issue.',
-    'upload:App.dmg',
-    'upload:App-intel.dmg',
-    'publish',
-  ])
-})
-
-test('creates and publishes a Release without assets', async () => {
-  const calls: string[] = []
-  await publishRelease('1.2.3', '- Fixed the issue.', 'a'.repeat(40), [], api({}, calls))
-  assert.equal(calls.at(-1), 'publish')
-  assert.equal(calls.includes('upload:App.dmg'), false)
-})
-
-test('refuses an existing Release or tag before creating a draft', async () => {
-  const releaseCalls: string[] = []
-  await assert.rejects(publishRelease('1.2.3', 'notes', 'a'.repeat(40), [], api({
-    hasRelease: async () => { releaseCalls.push('release'); return true },
-  }, releaseCalls)), /Release v1\.2\.3 already exists/)
-  assert.deepEqual(releaseCalls, ['release'])
-
-  const tagCalls: string[] = []
-  await assert.rejects(publishRelease('1.2.3', 'notes', 'a'.repeat(40), [], api({
-    createTag: async () => {
-      tagCalls.push('tag')
-      throw Object.assign(new Error('Reference already exists'), { status: 422 })
+function fixture(tagCommit?: string) {
+  const writes: string[] = []
+  const assets: Awaited<ReturnType<ReleaseApi['listAssets']>> = []
+  const state: { commit?: string, release?: Release } = { commit: tagCommit }
+  const api: ReleaseApi = {
+    findTagCommit: async () => state.commit,
+    findRelease: async () => state.release,
+    getRelease: async (id) => {
+      assert.equal(id, state.release?.id)
+      return state.release!
     },
-  }, tagCalls)), /Unable to create tag v1\.2\.3: Reference already exists/)
-  assert.deepEqual(tagCalls, ['find-release:v1.2.3', 'tag'])
+    createTag: async (tag, sha) => {
+      writes.push(`tag:${tag}`)
+      state.commit = sha
+    },
+    createDraft: async (name, body) => {
+      writes.push(`draft:${name}`)
+      const release = { id: 7, url, uploadUrl: '', tagName: name, name, body, draft: true, prerelease: false }
+      state.release = release
+      return release
+    },
+    listAssets: async () => assets,
+    deleteAsset: async (id) => {
+      writes.push(`delete:${id}`)
+      assets.splice(assets.findIndex((asset) => asset.id === id), 1)
+    },
+    uploadAsset: async (_release, asset) => {
+      writes.push(`upload:${asset.name}`)
+      assets.push({
+        id: 7 + assets.length, name: asset.name, label: null, state: 'uploaded',
+        size: asset.size, digest: `sha256:${asset.sha256}`,
+      })
+    },
+    publishDraft: async (id, body, sha) => {
+      assert.equal(id, state.release?.id)
+      assert.equal(sha, commit)
+      writes.push('publish')
+      state.release = { ...state.release!, body, draft: false }
+      return url
+    },
+  }
+  return { api, assets, state, writes }
+}
+
+test('creates a tag and draft, verifies assets, and publishes the English notes', async () => {
+  const { api, state, writes } = fixture()
+  const result = await publishRelease(input, api)
+  assert.deepEqual(result, { tagName: 'v1.2.3', url })
+  assert.deepEqual(writes, ['tag:v1.2.3', 'draft:v1.2.3', 'upload:App.dmg', 'upload:App-intel.dmg', 'publish'])
+  assert.equal(state.release?.body, input.body)
 })
 
-test('reports the created tag when draft creation fails', async () => {
-  await assert.rejects(publishRelease('1.2.3', 'notes', 'a'.repeat(40), [], api({
-    createDraft: async () => { throw new Error('draft creation denied') },
-  })), /tag v1\.2\.3 was created.*draft creation denied/)
+test('can use an independently named existing tag and publish without assets', async () => {
+  const { api, writes } = fixture(commit)
+  const tag = 'app/v1.2.3'
+  const result = await publishRelease({ ...input, existingTag: tag, assets: [] }, api)
+  assert.equal(result.tagName, tag)
+  assert.deepEqual(writes, [`draft:${tag}`, 'publish'])
 })
 
-test('keeps a failed asset upload unpublished and reports the draft URL and tag', async () => {
-  let published = false
-  await assert.rejects(publishRelease('1.2.3', 'notes', 'a'.repeat(40), assets, api({
-    uploadAsset: async () => { throw new Error('upload denied') },
-    publishDraft: async () => { published = true; return { url: '' } },
-  })), /Release at https:\/\/example\.test\/releases\/v1\.2\.3 and tag v1\.2\.3: upload denied/)
-  assert.equal(published, false)
+test('rejects a missing explicit tag or a different commit before writing', async () => {
+  for (const remoteCommit of [undefined, 'different']) {
+    const { api, writes } = fixture(remoteCommit)
+    await assert.rejects(publishRelease({ ...input, existingTag: 'app-1.2.3' }, api), /Remote tag app-1\.2\.3/)
+    assert.deepEqual(writes, [])
+  }
 })
 
-test('reports the Release URL and API error when publication fails', async () => {
-  await assert.rejects(publishRelease('1.2.3', 'notes', 'a'.repeat(40), [], api({
-    publishDraft: async () => { throw new Error('publish denied') },
-  })), /check the Release at .*publish denied/)
+test('reuses the default tag after the tag creation response was lost', async () => {
+  const { api, writes } = fixture()
+  const createTag = api.createTag
+  api.createTag = async (tag, sha) => {
+    await createTag(tag, sha)
+    throw new Error('Request timed out')
+  }
+  await assert.rejects(publishRelease(input, api), /Request timed out/)
+  await publishRelease(input, api)
+  assert.equal(writes.filter((write) => write.startsWith('tag:')).length, 1)
+  assert.equal(writes.at(-1), 'publish')
 })
 
-test('propagates preflight API errors before attempting to write', async () => {
-  const error = Object.assign(new Error('Forbidden'), { status: 403 })
-  await assert.rejects(publishRelease('1.2.3', 'notes', 'a'.repeat(40), [], api({
-    hasRelease: async () => { throw error },
-  })), error)
+test('resumes a draft after partial upload, skips the verified asset and replaces the starter', async () => {
+  const { api, assets, state, writes } = fixture()
+  const upload = api.uploadAsset
+  api.uploadAsset = async (release, asset) => {
+    if (asset.name === 'App.dmg') return upload(release, asset)
+    assets.push({ id: 123, name: asset.name, label: null, state: 'starter', size: 0 })
+    throw new Error('502 Bad Gateway')
+  }
+  await assert.rejects(publishRelease(input, api), /https:\/\/example\.test\/releases.*502/)
+  assert.equal(state.release?.draft, true)
+  assert.match(state.release?.body || '', /<!-- release-bits:publish:v1:[a-f0-9]{64} -->/)
+
+  await assert.rejects(publishRelease({ ...input, assets: input.assets.slice(0, 1) }, api), /does not match/)
+  writes.length = 0
+  api.uploadAsset = upload
+  await publishRelease({ ...input, assets: [...input.assets].reverse() }, api)
+  assert.deepEqual(writes, ['delete:123', 'upload:App-intel.dmg', 'publish'])
+})
+
+test('refuses to overwrite a completed asset that does not match the draft', async () => {
+  const { api, assets, writes } = fixture(commit)
+  const publish = api.publishDraft
+  api.publishDraft = async () => { throw new Error('publication failed') }
+  await assert.rejects(publishRelease(input, api), /publication failed/)
+  assets[0].digest = 'sha256:different'
+  api.publishDraft = publish
+  writes.length = 0
+  await assert.rejects(publishRelease(input, api), /does not match the requested file: App\.dmg/)
+  assert.deepEqual(writes, [])
+})
+
+test('rejects an unrelated draft or a changed draft body', async () => {
+  const { api, writes } = fixture(commit)
+  await api.createDraft('v1.2.3', 'Edited notes', commit)
+  writes.length = 0
+  await assert.rejects(publishRelease(input, api), /does not match the requested publication/)
+  assert.deepEqual(writes, [])
+})
+
+test('returns the published URL after a lost response and rejects different published assets', async () => {
+  const { api, assets, writes } = fixture(commit)
+  const publish = api.publishDraft
+  api.publishDraft = async (...args) => {
+    await publish(...args)
+    throw new Error('Request timed out')
+  }
+  await assert.rejects(publishRelease(input, api), /Request timed out/)
+  writes.length = 0
+  assert.deepEqual(await publishRelease(input, api), { tagName: 'v1.2.3', url })
+  assets.pop()
+  await assert.rejects(publishRelease(input, api), /Published Release is missing assets: App-intel\.dmg/)
+  assert.deepEqual(writes, [])
+})
+
+test('does not publish a draft if the tag moves during upload', async () => {
+  const { api, state, writes } = fixture(commit)
+  const upload = api.uploadAsset
+  api.uploadAsset = async (release, asset) => {
+    await upload(release, asset)
+    state.commit = 'different'
+  }
+  await assert.rejects(publishRelease(input, api), /Remote tag v1\.2\.3 points to different/)
+  assert.equal(state.release?.draft, true)
+  assert(!writes.includes('publish'))
+})
+
+test('does not overwrite edits made to the draft during upload', async () => {
+  const { api, state, writes } = fixture(commit)
+  const upload = api.uploadAsset
+  api.uploadAsset = async (release, asset) => {
+    await upload(release, asset)
+    state.release = { ...release, body: 'Edited during upload' }
+  }
+  await assert.rejects(publishRelease(input, api), /does not match the requested publication/)
+  assert.equal(state.release?.body, 'Edited during upload')
+  assert.equal(state.release?.draft, true)
+  assert(!writes.includes('publish'))
 })

@@ -5,6 +5,9 @@ inputs:
   version:
     description: Catalog version to publish in X.Y.Z format.
     required: true
+  tag-name:
+    description: Existing remote tag to use. If omitted, create or reuse v{version}.
+    required: false
   catalog-path:
     description: Catalog path relative to the repository root.
     required: false
