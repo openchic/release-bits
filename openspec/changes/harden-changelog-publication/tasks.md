@@ -12,3 +12,8 @@
 - [x] 3.1 Guard cleanup against moved branches and open PR reuse. Verify both cases and document the read permission.
 - [x] 3.2 Check attachment quotas before publication and report file read failures. Verify size boundaries and packaged upload and read failure cases.
 - [x] 3.3 Add a minimal standalone workflow under `examples/`, link to it from the Release documentation, and verify the YAML and OpenSpec change.
+
+## 4. Queued Action publication
+
+- [x] 4.1 Verify four queued publications dispatched at the same SHA, and reject source changes after verification without updating remote refs.
+- [x] 4.2 Verify that replacing the history of `main` reports that a fresh publish run is required.

@@ -149,3 +149,5 @@ App 的 tag、GitHub Release、appcast 和打包由 App 仓库自己的 workflow
 4. Workflow 收集该 Action 自上次发布以来的 `feat` 和 `fix` 提交，生成变更日志并创建 GitHub Release。
 
 调用方可用 `@v1` 跟随主版本，或用 `@changelog-v1.1.0` 固定版本。
+
+连续发起多个 Action 发布时，发布任务依次更新 `main`。排队期间若 `main` 只更新了其他 Action 的版本，后续任务会保留这些更新，并继续发布本次已经验证的构建产物。若源码或所选 Action 的包清单已变更，请基于最新 `main` 重新发起发布。

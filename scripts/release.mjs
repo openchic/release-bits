@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 
 function git(args, input) {
   // Git tree records can contain filenames that are not valid UTF-8.
@@ -53,6 +54,39 @@ function readPackage(ref, path) {
   const text = Buffer.from(git(['show', ref + ':' + path + '/package.json']), 'latin1')
     .toString('utf8')
   return JSON.parse(text)
+}
+
+function isAncestor(source, target) {
+  try {
+    git(['merge-base', '--is-ancestor', source, target])
+    return true
+  } catch (error) {
+    if (error.status === 1) return false
+    throw error
+  }
+}
+
+function publicationBase(source, packagePath) {
+  const main = sha('refs/remotes/origin/main')
+  if (main === source) return main
+
+  const stale = () => new Error('main changed since this run was verified; start a new publish run')
+  if (!isAncestor(source, main)) throw stale()
+
+  const changes = git(['diff', '--no-renames', '--name-status', '-z', source, main])
+    .split('\0').filter(Boolean)
+  // Queued runs can share a verified source. Only sibling version bumps are safe to carry forward.
+  for (let index = 0; index < changes.length; index += 2) {
+    const [status, path] = [changes[index], changes[index + 1]]
+    const match = /^(actions\/[a-z][a-z0-9-]*)\/package\.json$/.exec(path)
+    if (status !== 'M' || !match || match[1] === packagePath) throw stale()
+
+    const { version: oldVersion, ...oldManifest } = readPackage(source, match[1])
+    const { version: newVersion, ...newManifest } = readPackage(main, match[1])
+    if (typeof oldVersion !== 'string' || typeof newVersion !== 'string' ||
+        !isDeepStrictEqual(oldManifest, newManifest)) throw stale()
+  }
+  return main
 }
 
 function trailer(body, name) {
@@ -110,7 +144,7 @@ function promote(action, versionType, sourceRef) {
   const packagePath = 'actions/' + action
   git(['cat-file', '-e', source + ':' + packagePath + '/action.yml'])
   requireBuiltAction(packagePath)
-  git(['fetch', '--force', '--tags', 'origin'])
+  git(['fetch', '--force', '--tags', 'origin', 'refs/heads/main:refs/remotes/origin/main'])
   const tags = new Set(git(['tag', '--list']).trimEnd().split('\n').filter(Boolean))
   const actionTags = git(['tag', '--list', '--sort=-version:refname', action + '-v*'])
     .trimEnd().split('\n').filter(Boolean)
@@ -138,12 +172,14 @@ function promote(action, versionType, sourceRef) {
   let releaseSource = source
 
   if (!resumedTag) {
+    const base = publicationBase(source, packagePath)
     if (actionTags.length) {
       const previousPackage = readPackage(actionTags[0], packagePath)
       if (previousPackage.version !== version) {
         throw new Error('Action package.json version does not match its latest release')
       }
     }
+    if (base !== source) git(['switch', '--detach', base])
 
     try {
       execFileSync('pnpm', ['version', versionType, '--no-git-tag-version'], {

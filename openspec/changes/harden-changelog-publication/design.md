@@ -10,3 +10,4 @@ The consumer Release Action works on a checked-out commit. Repository workflows 
 - Keep native workflow path filters, add cleanup to the reusable verification and publication selector, and give the Release workflow smoke step the same upload fixture as the package test.
 - Compare the remote branch to the close event's head SHA and check open PRs before sending the delete request. The REST checks and deletion are separate requests.
 - Check file count and size during preflight. Upload a Node file-backed Blob through the existing Octokit client so read failures reject the request while large files remain streamed.
+- Keep the dispatch SHA for verification, build output, release notes and retries. Before creating a version commit, fetch `main` and use it as the parent if its tree differs only in the `version` fields of sibling Actions. Ask for a fresh run on other changes. Keep the atomic push and the lease on the moving tag.

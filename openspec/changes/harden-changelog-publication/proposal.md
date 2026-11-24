@@ -9,6 +9,7 @@ Review found that the Release smoke step omits its required fixture, cleanup lac
 - Detect existing draft Releases and reserve the version tag at the checked-out commit before creating a Release.
 - Preserve changelog branches that have moved or are used by an open PR.
 - Check GitHub attachment limits before writing, report file read failures, and document standalone usage.
+- Allow queued Action publications from the same verified commit to append their version commits to `main` in order.
 
 ## Capabilities
 

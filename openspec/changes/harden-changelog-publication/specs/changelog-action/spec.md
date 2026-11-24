@@ -1,5 +1,40 @@
 ## MODIFIED Requirements
 
+### Requirement: Independent promotion
+A release SHALL update only the selected action directory on its major snapshot and provide an action-specific fixed version. A queued release SHALL preserve sibling Action version bumps already on `main` while publishing the selected Action built from the verified source. If `main` has diverged from that source or contains other file changes, the queued release SHALL stop before updating remote refs and request a new run.
+
+#### Scenario: Package version matches release
+- **WHEN** an Action release snapshot is created
+- **THEN** its `package.json` version matches the fixed release tag and the version change is committed to `main`.
+
+#### Scenario: Version commit and tags publish together
+- **WHEN** the selected Action is released
+- **THEN** the workflow uses `pnpm version` to bump its package, then atomically pushes the `main` version commit, action-specific fixed tag and moving major snapshot tag.
+
+#### Scenario: Release notes list action changes
+- **WHEN** the GitHub Release is created
+- **THEN** its notes group that Action's conventional `feat` and `fix` commits into separate sections.
+
+#### Scenario: Consumer runs the published action
+- **WHEN** a workflow references the action by its release tag
+- **THEN** the runner can execute the bundled entry point without installing pnpm or the workspace dependencies.
+
+#### Scenario: Two actions share v1
+- **WHEN** one action moves to a later v1 patch
+- **THEN** all sibling action trees on v1 and all other major tags retain their prior content.
+
+#### Scenario: A second major starts
+- **WHEN** an action first releases v2
+- **THEN** its directory is available on v2 while changelog remains callable at v1.
+
+#### Scenario: Several actions queue at the same source
+- **WHEN** queued publications for distinct Actions were verified at the same source and only their version changes have advanced `main`
+- **THEN** each version commit follows the current `main` and the source of every snapshot is the verified commit.
+
+#### Scenario: The source changes while a release is queued
+- **WHEN** the verified source is no longer an ancestor of `main`, or `main` has changes beyond version fields of sibling Actions
+- **THEN** stop without publishing and request a new run.
+
 ### Requirement: Source-scoped test workflow
 The repository test workflow SHALL be named `Test actions` and use step names that consistently use `Verify` to distinguish workspace checks, packaged action execution and output verification. Pushes to `main` and pull requests SHALL run the workflow only when files under `actions/`, `shared/`, `scripts/`, `.github/workflows/`, or the root package workspace manifests change. The workflow SHALL remain callable through `workflow_call` without path filtering. The reusable workflow SHALL allow callers to skip the packaged action smoke steps through the `skip-action-smoke-test` input while retaining workspace checks and tests.
 

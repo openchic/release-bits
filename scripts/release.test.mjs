@@ -46,7 +46,7 @@ function repository(t) {
   git('init', '--bare', remoteRoot)
   git('remote', 'add', 'origin', remoteRoot)
   writeFileSync(join(root, '.gitignore'), 'actions/*/dist/\n')
-  for (const name of ['changelog', 'build-ios', 'build-macos']) {
+  for (const name of ['changelog', 'build-ios', 'build-macos', 'changelog-cleanup', 'changelog-release']) {
     const directory = join(root, 'actions', name)
     mkdirSync(join(directory, 'dist'), { recursive: true })
     writeFileSync(join(directory, 'action.yml'), 'name: ' + name + '\n')
@@ -59,6 +59,7 @@ function repository(t) {
     writeFileSync(join(directory, 'old'), 'first')
   }
   commit('feat(changelog): add release notes')
+  git('push', 'origin', 'HEAD:refs/heads/main')
   return { root, git, commit, promote, run }
 }
 
@@ -96,6 +97,7 @@ test('promotion commits pnpm version, creates feat and fix notes, and preserves 
 
   writeFileSync(join(root, 'actions/changelog/old'), 'fixed')
   commit('fix(changelog): correct release notes')
+  git('push', 'origin', 'HEAD:refs/heads/main')
   const changelogFix = promote('changelog', 'minor')
   assert.equal(changelogFix.tag, 'changelog-v1.1.0')
   assert.match(changelogFix.notes, /## Fixes\n\n- correct release notes/)
@@ -106,6 +108,7 @@ test('promotion commits pnpm version, creates feat and fix notes, and preserves 
 
   writeFileSync(join(root, 'actions/build-macos/old'), 'updated')
   commit('feat(build-macos): update builder')
+  git('push', 'origin', 'HEAD:refs/heads/main')
   const macosV2 = promote('build-macos', 'major')
   assert.equal(macosV2.tag, 'build-macos-v2.0.0')
   git('fetch', '--tags', '--force', 'origin')
@@ -113,4 +116,57 @@ test('promotion commits pnpm version, creates feat and fix notes, and preserves 
   assert.equal(git('rev-parse', 'v1:actions/build-macos'), macosTree)
   assert.equal(git('rev-parse', 'v1'), git('rev-parse', 'changelog-v1.1.0'))
   assert.equal(JSON.parse(git('show', 'build-macos-v2.0.0:actions/build-macos/package.json')).version, '2.0.0')
+})
+
+test('publishes four queued actions verified at the same source', (t) => {
+  const { git, promote } = repository(t)
+  const source = git('rev-parse', 'HEAD')
+  const names = ['changelog', 'changelog-cleanup', 'changelog-release', 'build-macos']
+  let previousCommit = source
+  for (const name of names) {
+    git('switch', '--detach', source)
+    const published = promote(name, 'major')
+    assert.equal(published.tag, `${name}-v1.0.0`)
+    assert.equal(git('rev-parse', 'HEAD^'), previousCommit)
+    previousCommit = published.source
+  }
+  git('fetch', '--tags', '--force', 'origin', 'main')
+  assert.equal(git('rev-parse', 'refs/remotes/origin/main'), previousCommit)
+  for (const name of names) {
+    const tag = `${name}-v1.0.0`
+    assert.ok(git('log', '-1', '--format=%B', tag).includes(`release-bits-source: ${source}`))
+    assert.equal(git('show', `v1:actions/${name}/dist/index.mjs`), `${name} bundle`)
+    assert.equal(git('rev-parse', `v1:actions/${name}`), git('rev-parse', `${tag}:actions/${name}`))
+    assert.equal(JSON.parse(git('show', `HEAD:actions/${name}/package.json`)).version, '1.0.0')
+  }
+})
+
+test('requires a fresh publish run when main contains new source changes', (t) => {
+  const { root, git, commit, promote } = repository(t)
+  const source = git('rev-parse', 'HEAD')
+  writeFileSync(join(root, 'actions/build-macos/old'), 'main changed after verification')
+  commit('fix(build-macos): update source')
+  const main = git('rev-parse', 'HEAD')
+  git('push', 'origin', 'HEAD:refs/heads/main')
+  git('switch', '--detach', source)
+
+  assert.throws(() => promote('build-macos', 'major'), /main changed since this run was verified/)
+  assert.equal(git('rev-parse', 'HEAD'), source)
+  assert.equal(git('rev-parse', 'refs/remotes/origin/main'), main)
+  assert.equal(git('tag', '--list'), '')
+})
+
+test('requires a fresh publish run when main has no common history with the source', (t) => {
+  const { git, promote } = repository(t)
+  const source = git('rev-parse', 'HEAD')
+  git('checkout', '--orphan', 'replacement')
+  git('commit', '-m', 'chore: replace main history')
+  const replacement = git('rev-parse', 'HEAD')
+  git('push', `--force-with-lease=refs/heads/main:${source}`, 'origin', 'HEAD:refs/heads/main')
+  git('switch', '--detach', source)
+
+  assert.throws(() => promote('build-macos', 'major'), /start a new publish run/)
+  assert.equal(git('rev-parse', 'HEAD'), source)
+  assert.match(git('ls-remote', 'origin', 'refs/heads/main'), new RegExp(`^${replacement}\\s`))
+  assert.equal(git('ls-remote', '--tags', 'origin'), '')
 })
