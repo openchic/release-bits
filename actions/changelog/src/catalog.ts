@@ -3,7 +3,7 @@ import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { git } from './git.ts'
 import { record } from './notes.ts'
-import { isNewer } from './version.ts'
+import { isNewer } from '../../../shared/version.mts'
 
 export function catalogPath(input: string) {
   const root = realpathSync(git('rev-parse', '--show-toplevel').trim())

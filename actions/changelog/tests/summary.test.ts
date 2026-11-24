@@ -9,18 +9,16 @@ import { writeSummary } from '../src/summary.ts'
 test('summary appends final notes, handles reuse and warns on write failure', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'release-bits-summary-'))
   const file = join(dir, 'summary.md')
-  const preview = join(dir, 'notes.md')
   const previous = process.env.GITHUB_STEP_SUMMARY
   process.env.GITHUB_STEP_SUMMARY = file
   writeFileSync(file, 'Previous summary\n')
-  writeFileSync(preview, '## 简体中文\n\n- 修复了显示。\n\n## English\n\n- Fixed display.\n')
   const outputs = {
     version: '1.1.0', branch: 'changelogs/v1.1.0', 'pr-url': 'https://example.test/pull/12',
-    'pr-created': true, 'source-sha': 'a'.repeat(40), 'commit-count': 2, 'warning-count': 1,
-    'notes-json-path': '', 'notes-markdown-path': preview,
+    'pr-created': true,
   }
+  const notes = { 'zh-CN': ['修复了显示。'], en: ['Fixed display.'] }
   try {
-    await writeSummary(outputs)
+    await writeSummary(outputs, notes)
     const created = readFileSync(file, 'utf8')
     assert.match(created, /^Previous summary\n- \*\*Status:\*\* Created draft PR/)
     assert.match(created, /\[Please review the PR\. Merging it approves the release notes\.\]\(https:\/\/example\.test\/pull\/12\)/)
@@ -31,7 +29,7 @@ test('summary appends final notes, handles reuse and warns on write failure', as
     assert.match(created, /Fixed display\./)
 
     writeFileSync(file, '')
-    await writeSummary({ ...outputs, 'commit-count': 0 })
+    await writeSummary(outputs, notes)
     const draftReuse = readFileSync(file, 'utf8')
     assert.match(draftReuse, /\*\*Status:\*\* Created draft PR/)
     assert.match(draftReuse, /\[Please review the PR\. Merging it approves the release notes\.\]/)
@@ -39,8 +37,7 @@ test('summary appends final notes, handles reuse and warns on write failure', as
     assert.match(draftReuse, /Fixed display\./)
 
     writeFileSync(file, '')
-    await writeSummary({ ...outputs, 'pr-created': false, 'source-sha': '',
-      'commit-count': 0, 'warning-count': 0, 'notes-markdown-path': '' })
+    await writeSummary({ ...outputs, 'pr-created': false })
     const reused = readFileSync(file, 'utf8')
     assert.match(reused, /\*\*Status:\*\* Reused PR/)
     assert.match(reused, /\[Please review the PR\. Merging it approves the release notes\.\]/)
@@ -54,7 +51,7 @@ test('summary appends final notes, handles reuse and warns on write failure', as
       return true
     })
     try {
-      await assert.doesNotReject(writeSummary(outputs))
+      await assert.doesNotReject(writeSummary(outputs, notes))
       assert.ok(warnings.some((message) => message.includes('::warning::Unable to write release notes job summary:')))
       assert.equal(core.summary.isEmptyBuffer(), true)
     } finally {

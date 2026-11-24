@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepare, type Inputs } from '../src/prepare.ts'
 import { evidence, generate, maxLength, validateNotes, warnings } from '../src/notes.ts'
-import { effectiveVersion } from '../src/version.ts'
+import { effectiveVersion } from '../../../shared/version.mts'
 import { catalogPath } from '../src/catalog.ts'
 import { requiredEnv } from '../src/env.ts'
 
@@ -33,7 +33,7 @@ function commit(path: string, text: string, subject: string) {
   git('commit', '-m', subject)
 }
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'shipkit-test-'))
+  root = mkdtempSync(join(tmpdir(), 'release-bits-test-'))
   process.chdir(root)
   git('init', '--bare', 'origin')
   git('init', '-b', 'main', 'work')
@@ -59,7 +59,9 @@ test('version, evidence and bilingual style', () => {
   const original = { sha: 'a'.repeat(40), subject: 'fix: display', body: '' }
   const revert = { sha: 'b'.repeat(40), subject: 'revert', body: 'This reverts commit ' + original.sha }
   assert.throws(() => evidence([revert, original]), /No feat/)
-  assert.equal(evidence([{ ...revert, sha: 'c'.repeat(40), body: 'This reverts commit ' + revert.sha }, revert, original]).count, 1)
+  assert.equal(JSON.parse(evidence([
+    { ...revert, sha: 'c'.repeat(40), body: 'This reverts commit ' + revert.sha }, revert, original,
+  ]).json).commits.length, 1)
   assert.throws(() => evidence([{ ...original, body: '文'.repeat(70_000) }]), /too large/)
 })
 
@@ -88,14 +90,13 @@ test('catalog aliases resolve inside the checkout, including for a new file', ()
   assert.throws(() => catalogPath('outside/new.json'), /inside the repository/)
 })
 
-test('open PR returns all nine outputs without model or checkout operations', async () => {
+test('open PR returns the required outputs without model or checkout operations', async () => {
   const result = await prepare(input, {
     find: async () => url,
     create: async () => { throw new Error('unexpected PR creation') },
   })
   assert.deepEqual(result.outputs, { version: '1.1.0', branch: 'changelogs/v1.1.0', 'pr-url': url,
-    'pr-created': false, 'source-sha': '', 'commit-count': 0, 'warning-count': 0,
-    'notes-json-path': '', 'notes-markdown-path': '' })
+    'pr-created': false })
 })
 
 test('generate and push only catalog, then reuse human-edited draft without model', async () => {
@@ -109,9 +110,8 @@ test('generate and push only catalog, then reuse human-edited draft without mode
   assert.deepEqual(titles, ['chore(release): add v1.1.0 release notes'])
   assert.equal(git('log', '-1', '--format=%s'), titles[0])
   assert.equal(result.outputs['pr-created'], true)
-  assert.equal(result.outputs['commit-count'], 1)
-  assert.deepEqual(JSON.parse(readFileSync(result.outputs['notes-json-path'], 'utf8')).notes, notes)
-  assert.match(readFileSync(result.outputs['notes-markdown-path'], 'utf8'), /Fixed display/)
+  assert.deepEqual(result.notes, notes)
+  assert.equal(result.warnings.length, 0)
   assert.match(readFileSync('changelogs.json', 'utf8'), /9999999999999999999/)
   assert.equal(git('diff', '--name-only', 'main', 'HEAD'), 'changelogs.json')
   const branch = result.outputs.branch
@@ -122,8 +122,7 @@ test('generate and push only catalog, then reuse human-edited draft without mode
   const reused = await prepare(input, checkedPulls, async () => { throw new Error('unexpected generation') })
   assert.deepEqual(titles, Array(2).fill('chore(release): add v1.1.0 release notes'))
   assert.equal(git('log', '-1', '--format=%s'), 'docs: edit draft')
-  assert.equal(reused.outputs['commit-count'], 0)
-  assert.equal(reused.outputs['warning-count'], 2)
+  assert.equal(reused.warnings.length, 2)
   assert.equal(readFileSync('changelogs.json', 'utf8'), edited)
 })
 

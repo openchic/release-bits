@@ -34,10 +34,9 @@ import require$$1$5 from 'node:dns';
 import require$$5$3 from 'string_decoder';
 import 'child_process';
 import 'timers';
-import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, lstatSync, existsSync as existsSync$1, readFileSync as readFileSync$1, renameSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve, basename, dirname, relative, sep as sep$1 } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { realpathSync, lstatSync, existsSync as existsSync$1, readFileSync as readFileSync$1, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { resolve, basename, dirname, relative, sep as sep$1 } from 'node:path';
 
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -34565,27 +34564,19 @@ function evidence(commits) {
     const json = JSON.stringify({ commits: items });
     if (Buffer.byteLength(json) > 200_000)
         throw new Error('Commit evidence is too large; narrow base-ref');
-    return { json, count: items.length };
+    return { json };
 }
 async function generate(version, base, max, model, call = requestNotes) {
     const source = head();
-    const { json, count } = evidence(commitsSince(base));
+    const { json } = evidence(commitsSince(base));
     const notes = validateNotes(await call(buildPrompt(version, json, max), model));
     if (head() !== source)
         throw new Error('Repository changed during generation');
-    return { source, count, notes };
+    return { source, notes };
 }
 function markdown(notes) {
     return ['## 简体中文', '', ...notes['zh-CN'].map((s) => '- ' + s),
         '', '## English', '', ...notes.en.map((s) => '- ' + s)].join('\n');
-}
-function preview(version, source, notes, output) {
-    const dir = mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'shipkit-notes-'));
-    mkdirSync(dir, { recursive: true });
-    const prefix = join(dir, 'release-notes-' + version);
-    writeFileSync(prefix + '.json', JSON.stringify({ version, source_sha: source, notes }, null, 2) + '\n');
-    writeFileSync(prefix + '.md', markdown(notes) + '\n');
-    return { 'notes-json-path': prefix + '.json', 'notes-markdown-path': prefix + '.md' };
 }
 
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -34681,11 +34672,10 @@ async function prepare(input, pulls, generateNotes = generate) {
     const branch = 'changelogs/v' + version;
     const existing = await pulls.find(branch);
     const outputs = {
-        version, branch, 'pr-created': false, 'pr-url': existing || '', 'source-sha': '',
-        'commit-count': 0, 'warning-count': 0, 'notes-json-path': '', 'notes-markdown-path': '',
+        version, branch, 'pr-created': false, 'pr-url': existing || '',
     };
     if (existing)
-        return { outputs, warnings: [] };
+        return { outputs, warnings: [], notes: undefined };
     const shallow = git('rev-parse', '--is-shallow-repository').trim() === 'true';
     git('fetch', '--tags', ...(shallow ? ['--unshallow'] : []), 'origin');
     git('check-ref-format', 'refs/heads/' + input.base);
@@ -34719,7 +34709,7 @@ async function prepare(input, pulls, generateNotes = generate) {
         verifyChanges(draft.source_sha, path);
         if (!isDeepStrictEqual(at(draft.source_sha, path).records, history))
             throw new Error('Published catalog history changed');
-        result = { source: draft.source_sha, count: 0, notes: validateNotes(draft.notes) };
+        result = { source: draft.source_sha, notes: validateNotes(draft.notes) };
     }
     else {
         checkVersions(current.records, version);
@@ -34738,7 +34728,6 @@ async function prepare(input, pulls, generateNotes = generate) {
         git('push', 'origin', 'HEAD:refs/heads/' + branch);
     }
     const issues = warnings(result.notes, input.max);
-    const paths = preview(version, result.source, result.notes);
     const body = '## Release notes v' + version + '\n\n' + markdown(result.notes) +
         '\n\n---\n\nMerging this PR approves the release notes.\n';
     try {
@@ -34751,14 +34740,11 @@ async function prepare(input, pulls, generateNotes = generate) {
             throw error;
         outputs['pr-url'] = concurrent;
     }
-    Object.assign(outputs, paths, {
-        'source-sha': result.source, 'commit-count': result.count, 'warning-count': issues.length,
-    });
-    return { outputs, warnings: issues };
+    return { outputs, warnings: issues, notes: result.notes };
 }
 
 /** Append the completed PR result without failing preparation if reporting fails. */
-async function writeSummary(outputs) {
+async function writeSummary(outputs, notes) {
     try {
         const status = outputs['pr-created'] ? 'Created draft PR' : 'Reused PR';
         const lines = [
@@ -34767,9 +34753,8 @@ async function writeSummary(outputs) {
             '',
             '[Please review the PR. Merging it approves the release notes.](' + outputs['pr-url'] + ')',
         ];
-        if (outputs['notes-markdown-path']) {
-            lines.push('', readFileSync$1(outputs['notes-markdown-path'], 'utf8').trimEnd());
-        }
+        if (notes)
+            lines.push('', markdown(notes));
         await summary.addRaw(lines.join('\n') + '\n').write();
     }
     catch (error) {
@@ -34802,6 +34787,6 @@ async function run() {
         setOutput(name, value);
     for (const message of result.warnings)
         warning(message);
-    await writeSummary(result.outputs);
+    await writeSummary(result.outputs, result.notes);
 }
 run().catch((error) => setFailed(error instanceof Error ? error.message : String(error)));

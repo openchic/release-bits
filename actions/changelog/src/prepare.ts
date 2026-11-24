@@ -1,8 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
 import * as catalog from './catalog.ts'
 import { git, gitResult, head } from './git.ts'
-import { generate, markdown, preview, validateNotes, warnings } from './notes.ts'
-import { BUMPS, effectiveVersion } from './version.ts'
+import { generate, markdown, validateNotes, warnings } from './notes.ts'
+import { BUMPS, effectiveVersion } from '../../../shared/version.mts'
 
 export type Inputs = {
   version: string, bump: string, catalog: string, base: string, since: string, max: number, model: string,
@@ -25,10 +25,9 @@ export async function prepare(input: Inputs, pulls: PullRequests, generateNotes 
   const branch = 'changelogs/v' + version
   const existing = await pulls.find(branch)
   const outputs = {
-    version, branch, 'pr-created': false, 'pr-url': existing || '', 'source-sha': '',
-    'commit-count': 0, 'warning-count': 0, 'notes-json-path': '', 'notes-markdown-path': '',
+    version, branch, 'pr-created': false, 'pr-url': existing || '',
   }
-  if (existing) return { outputs, warnings: [] }
+  if (existing) return { outputs, warnings: [], notes: undefined }
 
   const shallow = git('rev-parse', '--is-shallow-repository').trim() === 'true'
   git('fetch', '--tags', ...(shallow ? ['--unshallow'] : []), 'origin')
@@ -59,7 +58,7 @@ export async function prepare(input: Inputs, pulls: PullRequests, generateNotes 
     catalog.checkVersions(history, version)
     verifyChanges(draft.source_sha, path)
     if (!isDeepStrictEqual(catalog.at(draft.source_sha, path).records, history)) throw new Error('Published catalog history changed')
-    result = { source: draft.source_sha, count: 0, notes: validateNotes(draft.notes) }
+    result = { source: draft.source_sha, notes: validateNotes(draft.notes) }
   } else {
     catalog.checkVersions(current.records, version)
     const source = head()
@@ -80,7 +79,6 @@ export async function prepare(input: Inputs, pulls: PullRequests, generateNotes 
   }
 
   const issues = warnings(result.notes, input.max)
-  const paths = preview(version, result.source, result.notes)
   const body = '## Release notes v' + version + '\n\n' + markdown(result.notes) +
     '\n\n---\n\nMerging this PR approves the release notes.\n'
   try {
@@ -91,8 +89,5 @@ export async function prepare(input: Inputs, pulls: PullRequests, generateNotes 
     if (!concurrent) throw error
     outputs['pr-url'] = concurrent
   }
-  Object.assign(outputs, paths, {
-    'source-sha': result.source, 'commit-count': result.count, 'warning-count': issues.length,
-  })
-  return { outputs, warnings: issues }
+  return { outputs, warnings: issues, notes: result.notes }
 }
