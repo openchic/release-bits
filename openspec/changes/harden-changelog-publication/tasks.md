@@ -17,3 +17,11 @@
 
 - [x] 4.1 Verify four queued publications dispatched at the same SHA, and reject source changes after verification without updating remote refs.
 - [x] 4.2 Verify that replacing the history of `main` reports that a fresh publish run is required.
+
+## 5. Retryable consumer releases
+
+- [x] 5.1 Support explicit existing tags and default tag reuse, validate the target commit, and resume matching drafts and published Releases.
+- [x] 5.2 Document both tag modes and the artifact-based retry flow for callers that atomically push a version commit and tag.
+- [x] 5.3 Verify tag conflicts, partial uploads, lost publication responses and the packaged Action with mocks. Validate workflow YAML and OpenSpec.
+- [x] 5.4 Verify same-size asset replacement and edits made during upload. Update the merged PR workflow example to reuse the build artifact on publication retries.
+- [x] 5.5 Stage attachments before hashing and uploading. Verify source removal, replacement with preserved modification time, and staging cleanup after success or failure.

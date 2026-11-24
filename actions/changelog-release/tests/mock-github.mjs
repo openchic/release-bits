@@ -1,55 +1,83 @@
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { unlinkSync } from 'node:fs'
+import { statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 
 const repository = process.env.GITHUB_REPOSITORY
-const tag = 'v1.2.3'
+const existingTag = process.env['INPUT_TAG-NAME']
+const tag = existingTag || 'v1.2.3'
+const notes = '- Fixed the release fixture.'
 const prefix = '/repos/' + repository
 const hasDraft = process.env.FIXTURE_EXISTING_DRAFT === 'true'
 let checkedLastPage = false
-let tagCreated = false
-let assetUploaded = false
+const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+const tagObject = 'd'.repeat(40)
+let tagCommit = existingTag || hasDraft ? head : undefined
+let createdDraft
+const assets = []
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost')
+  const path = decodeURIComponent(url.pathname)
   const chunks = []
-  for await (const chunk of req) chunks.push(chunk)
+  try {
+    for await (const chunk of req) chunks.push(chunk)
+  } catch (error) {
+    if (req.aborted) return
+    throw error
+  }
   const body = Buffer.concat(chunks).toString('utf8')
   let status = 404
   let value = { message: 'Not Found' }
 
-  if (req.method === 'GET' && url.pathname === prefix + '/releases') {
+  if (req.method === 'GET' && path === prefix + '/git/ref/tags/' + tag) {
+    if (tagCommit) {
+      status = 200
+      value = { object: existingTag ? { type: 'tag', sha: tagObject } : { type: 'commit', sha: tagCommit } }
+    }
+  } else if (req.method === 'GET' && path === prefix + '/git/tags/' + tagObject) {
+    status = 200
+    value = { object: { type: 'commit', sha: tagCommit } }
+  } else if (req.method === 'GET' && path === prefix + '/releases') {
     status = 200
     if (url.searchParams.get('page') === '2') {
       checkedLastPage = true
-      value = hasDraft ? [{ tag_name: tag, draft: true }] : []
+      value = hasDraft ? [{ id: 12, tag_name: tag, name: tag, body: notes, draft: true, prerelease: false }] : []
     } else {
       url.host = '127.0.0.1:' + server.address().port
       url.searchParams.set('page', '2')
       res.setHeader('link', `<${url}>; rel="next"`)
       value = [{ tag_name: 'v1.2.2', draft: false }]
     }
-  } else if (req.method === 'POST' && url.pathname === prefix + '/git/refs') {
+  } else if (req.method === 'POST' && path === prefix + '/git/refs') {
     const { ref, sha } = JSON.parse(body)
-    if (checkedLastPage && !hasDraft && ref === 'refs/tags/' + tag && /^[0-9a-f]{40}$/.test(sha)) {
+    if (checkedLastPage && !tagCommit && ref === 'refs/tags/' + tag && sha === head) {
       status = 201
       value = { ref, object: { sha, type: 'commit' } }
-      tagCreated = true
+      tagCommit = sha
     } else {
       status = 400
       value = { message: 'Unexpected tag creation' }
     }
-  } else if (req.method === 'POST' && url.pathname === prefix + '/releases') {
+  } else if (req.method === 'POST' && path === prefix + '/releases') {
     const release = JSON.parse(body)
-    if (tagCreated && release.tag_name === tag && release.name === tag && release.draft === true &&
-        release.body === '- Fixed the release fixture.') {
-      if (process.env.FIXTURE_DISAPPEARING_ASSET) unlinkSync(process.env.FIXTURE_DISAPPEARING_ASSET)
+    if (tagCommit && release.tag_name === tag && release.name === tag && release.draft === true &&
+        release.target_commitish === head && release.body.startsWith(notes + '\n\n<!-- release-bits:publish:v1:')) {
+      const asset = process.env.FIXTURE_MUTABLE_ASSET
+      if (process.env.FIXTURE_ASSET_CHANGE === 'delete') unlinkSync(asset)
+      if (process.env.FIXTURE_ASSET_CHANGE === 'replace') {
+        const { size, atime, mtime } = statSync(asset)
+        writeFileSync(asset, Buffer.alloc(size, 'x'))
+        utimesSync(asset, atime, mtime)
+      }
       status = 201
-      value = {
+      value = createdDraft = {
         id: 12,
         tag_name: tag,
         name: tag,
         body: release.body,
         draft: true,
+        prerelease: false,
         html_url: 'https://example.test/releases/' + tag,
         upload_url: 'http://127.0.0.1:' + server.address().port + '/uploads/12/assets{?name,label}',
       }
@@ -57,21 +85,31 @@ const server = createServer(async (req, res) => {
       status = 400
       value = { message: 'Unexpected release payload' }
     }
-  } else if (req.method === 'POST' && url.pathname === '/uploads/12/assets') {
+  } else if (req.method === 'GET' && path === prefix + '/releases/12' && createdDraft) {
+    status = 200
+    value = createdDraft
+  } else if (req.method === 'GET' && path === prefix + '/releases/12/assets') {
+    status = 200
+    value = assets
+  } else if (req.method === 'POST' && path === '/uploads/12/assets') {
     if (url.searchParams.get('name') === 'asset.txt' &&
         req.headers.authorization === 'token fixture' &&
         req.headers['content-type'] === 'application/octet-stream' &&
         Number(req.headers['content-length']) === Buffer.byteLength(body) &&
         body === 'release-bits asset fixture\n') {
       status = 201
-      value = { name: 'asset.txt', state: 'uploaded' }
-      assetUploaded = true
+      value = {
+        id: 42, name: 'asset.txt', label: url.searchParams.get('label'), state: 'uploaded',
+        size: Buffer.byteLength(body), digest: 'sha256:' + createHash('sha256').update(body).digest('hex'),
+      }
+      assets.push(value)
     } else {
       status = 400
       value = { message: 'Unexpected release asset request' }
     }
-  } else if (req.method === 'PATCH' && url.pathname === prefix + '/releases/12') {
-    if (JSON.parse(body).draft === false && assetUploaded) {
+  } else if (req.method === 'PATCH' && path === prefix + '/releases/12') {
+    const update = JSON.parse(body)
+    if (update.draft === false && update.body === notes && update.target_commitish === head && assets.length) {
       status = 200
       value = {
         id: 12,

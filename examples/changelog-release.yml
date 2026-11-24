@@ -7,6 +7,10 @@ on:
         description: Catalog version, for example 1.2.3
         required: true
         type: string
+      tag_name:
+        description: Existing tag pointing to the selected ref's commit, if supplied
+        required: false
+        type: string
 
 jobs:
   release:
@@ -19,7 +23,8 @@ jobs:
       - uses: openchic/release-bits/actions/changelog-release@v1
         with:
           version: ${{ inputs.version }}
-          # Set files after your build step when the release needs attachments.
+          tag-name: ${{ inputs.tag_name }}
+          # Download the original build artifacts before publishing with attachments.
           # files: |
           #   dist/App.dmg
           #   dist/App-intel.dmg

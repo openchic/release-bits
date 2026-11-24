@@ -131,7 +131,7 @@ if: >-
   startsWith(github.event.pull_request.head.ref, 'changelogs/v')
 ```
 
-发布 job 检出合并提交并传入版本。`changelog-release` 创建 tag、发布 Release 并上传附件。项目自己的 workflow 负责构建和更新 appcast。完整配置见 [合并 PR 后发布示例](changelog-release.md#合并-pr-后发布)。
+发布 job 检出合并提交并传入版本。`changelog-release` 创建或复用对应 tag，上传附件后发布 Release。项目自己的 workflow 负责构建和更新 appcast。完整配置见 [合并 PR 后发布示例](changelog-release.md#合并-pr-后发布)。
 
 ## 失败行为
 
