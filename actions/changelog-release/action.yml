@@ -1,0 +1,25 @@
+name: changelog-release
+description: Create a GitHub Release from a catalog entry and upload release files.
+
+inputs:
+  version:
+    description: Catalog version to publish in X.Y.Z format.
+    required: true
+  catalog-path:
+    description: Catalog path relative to the repository root.
+    required: false
+    default: changelogs.json
+  files:
+    description: Newline-separated repository-relative files to upload.
+    required: false
+outputs:
+  notes-en:
+    description: English release notes formatted as Markdown bullets.
+  tag-name:
+    description: Published version tag.
+  release-url:
+    description: Published GitHub Release URL.
+
+runs:
+  using: node24
+  main: dist/index.mjs

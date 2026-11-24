@@ -1,0 +1,9 @@
+[
+  {
+    "version": "1.2.3",
+    "notes": {
+      "zh-CN": ["修复了发布说明 fixture。"],
+      "en": ["Fixed the release fixture."]
+    }
+  }
+]
