@@ -1,0 +1,27 @@
+name: Publish catalog release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Catalog version, for example 1.2.3
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: openchic/release-bits/actions/changelog-release@v1
+        with:
+          version: ${{ inputs.version }}
+          # Set files after your build step when the release needs attachments.
+          # files: |
+          #   dist/App.dmg
+          #   dist/App-intel.dmg
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

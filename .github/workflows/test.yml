@@ -28,7 +28,7 @@ on:
         type: string
         default: ''
       skip-action-smoke-test:
-        description: Skip the packaged changelog Action smoke check when the caller verifies it separately.
+        description: Skip packaged Action smoke checks when the caller verifies them separately.
         required: false
         type: boolean
         default: false
@@ -96,6 +96,47 @@ jobs:
         run: pnpm --filter @release-bits/changelog-cleanup build
       - name: Verify changelog cleanup action tests
         run: pnpm --filter @release-bits/changelog-cleanup test
+
+  changelog-release:
+    name: Changelog release action
+    if: ${{ inputs.action == '' || inputs.action == 'changelog-release' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check changelog release action types
+        run: pnpm --filter @release-bits/changelog-release check
+      - name: Build changelog release action
+        run: pnpm --filter @release-bits/changelog-release build
+      - name: Verify changelog release action tests
+        run: pnpm --filter @release-bits/changelog-release test
+      - name: Verify packaged changelog release action
+        id: release
+        if: ${{ !inputs.skip-action-smoke-test }}
+        uses: ./actions/changelog-release
+        with:
+          version: 1.2.3
+          catalog-path: actions/changelog-release/tests/fixtures/changelogs.json
+          files: actions/changelog-release/tests/fixtures/asset.txt
+        env:
+          GITHUB_TOKEN: fixture
+          NODE_OPTIONS: --import=${{ github.workspace }}/actions/changelog-release/tests/mock-github.mjs
+      - name: Verify changelog release outputs
+        if: ${{ !inputs.skip-action-smoke-test }}
+        env:
+          OUTPUTS: ${{ toJSON(steps.release.outputs) }}
+        run: |
+          jq -e '. == {
+            "notes-en":"- Fixed the release fixture.",
+            "tag-name":"v1.2.3",
+            "release-url":"https://example.test/releases/v1.2.3"
+          }' <<< "$OUTPUTS"
 
   macos:
     name: macOS action
